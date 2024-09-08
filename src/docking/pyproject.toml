@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+dependencies = [
+  "httpx",
+  "gidgethub[httpx]>4.0.0",
+  "django>2.1; os_name != 'nt'",
+  "django>2.0; os_name == 'nt'",
+]
+
+[project]
+name = "mutadock"
+version = "1.0"
+authors = [
+  {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"},
+]
+description = "#TODO"
+readme = "README.md"
+license = {text = "GPL-3.0 license"}
+
+classifiers = [
+  "Development Status :: 4 - Beta",
+
+  # Indicate who your project is intended for
+  "Intended Audience :: Education",
+  "Topic :: Scientific/Engineering :: Bio-Informatics"
+
+  # Pick your license as you wish (see also "license" above)
+  "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)"
+
+  # Specify the Python versions you support here.
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.6",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+
+[project.urls]
+Documentation = "https://readthedocs.org"
+Repository = "https://github.com/naisarg14/mutadock"
+Issues = "https://github.com/naisarg14/mutadock/issues"
