@@ -1,5 +1,23 @@
 import re
 
+
+def backup(file_path):
+    import os
+    from datetime import datetime
+
+    if not os.path.exists(file_path):
+        return False
+    master_folder, file = os.path.split(os.path.abspath(file_path))
+    target_directory = os.path.join(master_folder, 'backups')
+    if not os.path.exists(target_directory):
+        os.makedirs(target_directory)
+    modified_time = os.path.getmtime(file_path)
+    timestamp = datetime.fromtimestamp(modified_time).strftime("%b-%d-%Y_%H.%M")
+    name, ext = os.path.splitext(file)
+    target_file = os.path.join(target_directory, f'{name}_{timestamp}{ext}')
+    os.rename(file_path, target_file)
+    return True
+
 def read_pdb_file(file_path):
     try:
         atoms = []
@@ -281,11 +299,10 @@ def dock_vina(receptor, ligand, output, log_file, config=None, autosite=None, ce
 
     return (True, "")
 
-print(dock_vina(receptor="BCH.pdbqt", ligand="antheraxanthin.pdbqt", output="log.pdb", log_file="log.txt", exhaustiveness=4))
 
 def main():
-    print("This is a dependency file to find the center of a autosite predicted docking site.")
-    #print("Geometric Center:", calculate_geometric_center('BCH1_cl_001.pdb'))
+    print("This is a dependency file for mutadock library's docking module.")
+
 
 
 if __name__ == "__main__":

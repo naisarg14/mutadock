@@ -1,0 +1,6 @@
+Error with importing modules for docking using Vina.
+Easiest way to fix this is to install vina using the following command:
+
+python -m pip install vina
+If you already have vina installed, please check the installation.
+If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com

@@ -1,10 +1,9 @@
 from itertools import product
 import os, time, sys
-import helpers
 import argparse
 from contextlib import contextmanager
 from tqdm import tqdm
-from vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center
+from vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
 
 
 @contextmanager
@@ -24,6 +23,9 @@ def naisarg():
     start_time = time.time()
     receptors, ligands, config, autosite, quiet = prepare_inputs()
 
+    if config is None and autosite is None:
+        print("Both config and autosite not provided. Assuming center as [0,0,0] and box_size as [30,30,30].")
+
     if config is not None:
         values = read_config
         values = read_config(config)
@@ -37,6 +39,7 @@ def naisarg():
             center = site[0]
         else:
             sys.exit(f"Error while calculating the geometric center of the autosite file {autosite} \nError: {site[1]}")
+
 
     completed_name = f"{receptor.removesuffix(".txt")}_{ligand.removesuffix(".txt")}_completed.txt"
 
@@ -69,8 +72,8 @@ def naisarg():
         log_file = os.path.join(output_dir, f'{receptor_file.removesuffix(".pdb")}_{ligand_file.removesuffix(".sdf")}_log.txt')
         csv_file = os.path.join(output_dir, "docking_results.csv")
 
-        helpers.backup(out_pdb)
-        helpers.backup(log_file)
+        backup(out_pdb)
+        backup(log_file)
 
         try:
             if not quiet: print(f"Docking for {ligand} with {receptor}")
