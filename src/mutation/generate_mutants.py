@@ -8,9 +8,6 @@ from tqdm import tqdm
 
 def main():
     sys.exit("Dependency for np_dock and np_mutation")
-    #generate_double_mutation("/mnt/n/hadh/gene1/gene1.pdb", "/mnt/n/hadh/gene1/gene1_double_ddg_sorted.csv", 50, 'mutations', text_file=f"{"/mnt/n/hadh/gene1/gene1.pdb".removesuffix('.pdb')}_gen_mut.txt")
-    #generate_single_mutation("/mnt/n/hadh/gene1/gene1.pdb", "/mnt/n/hadh/gene1/gene1_mutations_ddG_sorted.csv", 50, 'mutations', text_file=f"{"/mnt/n/hadh/gene1/gene1.pdb".removesuffix('.pdb')}_gen_mut.txt")
-
 
 def generate_single_mutation(pdb_file, csv_file, total=0, folder=None, text_file=None):
     if int(total) == 0:

@@ -39,4 +39,5 @@ def mutate_residue(pose, mutant_position, mutant_aa, pack_radius, pack_scorefxn)
 
 
 if __name__ == "__main__":
-    print("This file only contains functions used in other libraries.")
+    import sys
+    sys.exit("This file only contains functions used in other libraries.")

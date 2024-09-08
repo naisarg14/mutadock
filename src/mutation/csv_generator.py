@@ -1,5 +1,5 @@
 import csv, os, sys
-from Amino import get_dict, get_scfn_250, get_1
+from Amino import get_dict, get_scfn_250
 from Bio.PDB import PDBParser
 from helpers import backup
 import argparse

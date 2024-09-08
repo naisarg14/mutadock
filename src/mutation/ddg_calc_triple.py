@@ -1,12 +1,10 @@
 from pyrosetta import *
-#from pyrosetta.toolbox import mutate_residue
 import predict_ddG
 from itertools import combinations
 from Amino import get_1
 from helpers import backup
 from tqdm import tqdm
 import os, sys, argparse, csv
-from math import comb
 
 
 def main():

@@ -4,7 +4,8 @@ build-backend = "hatchling.build"
 
 dependencies = [
   "tqdm",
-  
+  "vina",
+  "meeko",
 ]
 
 [project]

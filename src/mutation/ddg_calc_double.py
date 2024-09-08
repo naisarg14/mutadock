@@ -1,9 +1,7 @@
 from pyrosetta import *
-#from pyrosetta.toolbox import mutate_residue
 import predict_ddG
 import csv
 from itertools import combinations
-from Amino import get_1
 from helpers import backup, Mutation
 from tqdm import tqdm
 import os, sys, argparse
