@@ -13,33 +13,34 @@ MUTADOCK is a comprehensive library designed for mutation studies and multiple r
 To install MUTADOCK, follow these steps:
 
 1. Clone the repository:
-   ```
-        git clone https://github.com/naisarg14/mutadock.git
-    ```
+```
+git clone https://github.com/naisarg14/mutadock.git
+```
 
 
 2. Navigate to the project directory:
-   ```
-        cd MUTADOCK
-    ```
+```
+cd MUTADOCK
+```
 
 
 3. Install dependencies including Pyrosetta:
-    For Linux:
-        ```
-            ./install.sh
-        ```
 
-    For Windows:
-        ```
-            win_install.bat
-        ```
+For Linux:
+```
+./install.sh
+```
+
+For Windows:
+```
+win_install.bat
+```
 
 
 3. Install dependencies without PyRosetta (PyRosetta is required and should be installed seperately.):
-    ```
-    pip install -r requirements.txt
-    ```
+```
+pip install -r requirements.txt
+```
 
 
 ## Usage
