@@ -1,5 +1,5 @@
 git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3.git
-pyrosetta-distributed=0.0.3
+pyrosetta-distributed==0.0.3
 
 biopython==1.84
 meeko==0.5.0
