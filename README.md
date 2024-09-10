@@ -13,42 +13,37 @@ MUTADOCK is a comprehensive library designed for mutation studies and multiple r
 To install MUTADOCK, follow these steps:
 
 1. Clone the repository:
-   git clone https://github.com/naisarg14/mutadock.git
+   `git clone https://github.com/naisarg14/mutadock.git`
 
 2. Navigate to the project directory:
-   cd MUTADOCK
+   `cd MUTADOCK`
 
-3. Install dependencies:
-   pip install -r requirements.txt
+3. Install dependencies including Pyrosetta:
+    For Linux:
+        `./install.sh`
+    For Windows:
+        `win_install.bat`
+
+3. Install dependencies without PyRosetta (PyRosetta is required and should be installed seperately.):
+   `pip install -r requirements.txt`
 
 ## Usage
 Here's a brief guide to using MUTADOCK:
 
 1. Basic Command:
-   mutadock --input <input_file> --output <output_file>
+   `mutadock --input <input_file> --output <output_file>`
 
 2. Example Usage:
-   mutadock --input mutations.txt --output results.txt
+   `mutadock --input mutations.txt --output results.txt`
 
 3. For more detailed usage options, see the [documentation](link-to-documentation).
 
-## Contributing
-We welcome contributions to MUTADOCK! To contribute:
-
-1. Fork the repository.
-2. Create a new branch:
-   git checkout -b feature-branch
-3. Make your changes and commit:
-   git commit -am 'Add new feature'
-4. Push to the branch:
-   git push origin feature-branch
-5. Submit a pull request.
 
 ## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 (GPL-3.0). See the [LICENSE](LICENSE) file for details.
 
 ## Contact
-For any questions or feedback, please contact [your-email@example.com](mailto:your-email@example.com).
+For any questions or feedback, please contact [your-email@example.com](mailto:naisarg.patel14@hotmail.com).
 
 ## Acknowledgments
 - Thanks to the contributors and libraries that made this project possible.

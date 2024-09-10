@@ -16,7 +16,7 @@ authors = [
 ]
 description = "#TODO"
 readme = "README.md"
-license = {text = "GPL-3.0 license"}
+license = {text = "GPL-3.0", file = "LICENSE"}
 keywords = ["egg", "bacon", "sausage", "tomatoes", "Lobster Thermidor"] #TODO
 
 classifiers = [
@@ -27,7 +27,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Bio-Informatics"
 
   # Pick your license as you wish (see also "license" above)
-  "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)"
+  "License :: OSI Approved :: GNU General Public License v3 (GPL-3.0)"
 
   # Specify the Python versions you support here.
   "Programming Language :: Python :: 3",
