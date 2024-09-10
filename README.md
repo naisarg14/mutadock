@@ -14,25 +14,25 @@ To install MUTADOCK, follow these steps:
 
 1. Clone the repository:
    ```
-    git clone https://github.com/naisarg14/mutadock.git
+        git clone https://github.com/naisarg14/mutadock.git
     ```
 
 
 2. Navigate to the project directory:
    ```
-cd MUTADOCK
+        cd MUTADOCK
     ```
 
 
 3. Install dependencies including Pyrosetta:
     For Linux:
         ```
-./install.sh
+            ./install.sh
         ```
 
     For Windows:
         ```
-win_install.bat
+            win_install.bat
         ```
 
 
