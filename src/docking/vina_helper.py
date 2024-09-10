@@ -1,4 +1,21 @@
-import re
+################################################################################
+#                           PROJECT INFORMATION                                #
+#                              Name: MUTADOCK                                  #
+#                           Author: Naisarg Patel                              #
+#                                                                              #
+#       Copyright (C) 2024 Naisarg Patel (https://github.com/naisarg14)        #
+#                                                                              #
+#          Project: https://github.com/naisarg14/mutadock                      #
+#                                                                              #
+#   This program is free software; you can redistribute it and/or modify it    #
+#  under the terms of the GNU General Public License version 3 as published    #
+#  by the Free Software Foundation.                                            #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful, but         #
+#  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY  #
+#  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License    #
+#  for more details.                                                           #
+################################################################################
 
 
 def backup(file_path):
@@ -19,6 +36,7 @@ def backup(file_path):
     return True
 
 def read_pdb_file(file_path):
+    import re
     try:
         atoms = []
         pattern = r'^ATOM\s+(\d+)\s+([A-Z]+)\s+([A-Z]{2,3})\s+([A-Z]?)\s*(\d+)\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(\d+\.\d{1,2})\s+(\d+\.\d{1,3})(?:\s+(\d+\.\d{1,3}))?\s+[A-Z]$'

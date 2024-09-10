@@ -1,3 +1,23 @@
+################################################################################
+#                           PROJECT INFORMATION                                #
+#                              Name: MUTADOCK                                  #
+#                           Author: Naisarg Patel                              #
+#                                                                              #
+#       Copyright (C) 2024 Naisarg Patel (https://github.com/naisarg14)        #
+#                                                                              #
+#          Project: https://github.com/naisarg14/mutadock                      #
+#                                                                              #
+#   This program is free software; you can redistribute it and/or modify it    #
+#  under the terms of the GNU General Public License version 3 as published    #
+#  by the Free Software Foundation.                                            #
+#                                                                              #
+#  This program is distributed in the hope that it will be useful, but         #
+#  WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY  #
+#  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License    #
+#  for more details.                                                           #
+################################################################################
+
+
 import os, sys, time, argparse
 from csv_generator import generate_csv
 from ddg_calc import calc_ddg
@@ -136,6 +156,7 @@ def naisarg():
     print(f"Completed in {elapsed_time:.2f} minutes!")
 
 
+
 def get_inputs():
     parser = argparse.ArgumentParser(prog="np_mutation", description=None, epilog="Written by Naisarg Patel (https://github.com/naisarg14)")
     parser.add_argument("-i",'--input', help="PDB File for predicting and generating mutations", metavar="PDB", required=True)
@@ -167,6 +188,8 @@ def get_inputs():
         sys.exit("Given file is not a PDB file, input should be a PDB file.")
 
     return full_pdb_path, args.double, args.spm, args.dpm, args.triple, args.tpm, args.noappend, args.quiet
+
+
 
 
 if __name__ == "__main__":
