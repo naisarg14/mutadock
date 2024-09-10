@@ -1,1 +1,6 @@
 /myenv/
+.csv
+.pdb
+.pdbqt
+.log
+/dist/

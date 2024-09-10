@@ -2,32 +2,32 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-dependencies = [
-  "tqdm",
-  "vina",
-  "meeko",
-]
 
 [project]
 name = "mutadock"
 version = "1.0"
 authors = [
-  {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"},
+  {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
 description = "#TODO"
 readme = "README.md"
-license = {text = "GPL-3.0", file = "LICENSE"}
+license = {text = "GPL-3.0"}
 keywords = ["egg", "bacon", "sausage", "tomatoes", "Lobster Thermidor"] #TODO
+dependencies = [
+  "tqdm",
+  "vina",
+  "meeko"
+]
 
 classifiers = [
   "Development Status :: 4 - Beta",
 
   # Indicate who your project is intended for
   "Intended Audience :: Education",
-  "Topic :: Scientific/Engineering :: Bio-Informatics"
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
 
   # Pick your license as you wish (see also "license" above)
-  "License :: OSI Approved :: GNU General Public License v3 (GPL-3.0)"
+  "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 
   # Specify the Python versions you support here.
   "Programming Language :: Python :: 3",
@@ -37,15 +37,16 @@ classifiers = [
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.12"
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/mutation", "src/docking"]
+
 [project.scripts]
-md_mutate = "/src/mutation/np_mutation.py:main"
-md_dock = "/src/docking/np_docking.py:main"
+md_mutate = "mutation.np_mutation.py:main"
+md_dock = "docking.np_docking.py:main"
 #TODO add more scripts
-
-
 
 [project.urls]
 Documentation = "https://readthedocs.org"
