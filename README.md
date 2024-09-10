@@ -47,13 +47,15 @@ pip install -r requirements.txt
 Here's a brief guide to using MUTADOCK:
 
 1. Basic Command:
-   ```
-md_mutate --input <input_file> --output <output_file>```
+```
+md_mutate --input <input_file> --output <output_file>
+```
 
 
 2. Example Usage:
-   ```
-md_dock --input mutations.txt --output results.txt```
+```
+md_dock --input mutations.txt --output results.txt
+```
 
 
 3. For more detailed usage options, see the [documentation](link-to-documentation).
