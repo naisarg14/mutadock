@@ -17,6 +17,7 @@ authors = [
 description = "#TODO"
 readme = "README.md"
 license = {text = "GPL-3.0 license"}
+keywords = ["egg", "bacon", "sausage", "tomatoes", "Lobster Thermidor"] #TODO
 
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -38,6 +39,12 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
 ]
+
+[project.scripts]
+md_mutate = "/src/mutation/np_mutation.py:main"
+md_dock = "/src/docking/np_docking.py:main"
+#TODO add more scripts
+
 
 
 [project.urls]
