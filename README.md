@@ -48,12 +48,13 @@ Here's a brief guide to using MUTADOCK:
 1. Featured Commands:
 ```
 md_mutate --input <input_file> --output <output_file>
-
+```
+```
 md_dock --input <receptor_txt> --output <ligand_txt> --config <config_file>
 ```
 
 
-2. For more detailed usage options, see the [documentation](link-to-documentation).
+<!-- 2. For more detailed usage options, see the [documentation](link-to-documentation). -->
 
 
 ## License
