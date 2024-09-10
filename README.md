@@ -26,12 +26,12 @@ cd MUTADOCK
 
 3. Install dependencies including Pyrosetta:
 
-For Linux:
+- For Linux:
 ```
 ./install.sh
 ```
 
-For Windows:
+- For Windows:
 ```
 win_install.bat
 ```
