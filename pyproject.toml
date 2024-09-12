@@ -57,4 +57,4 @@ md_ddg_triple = "mutation.ddg_calc_triple.py:main"
 [project.urls]
 Repository = "https://github.com/naisarg14/mutadock"
 Issues = "https://github.com/naisarg14/mutadock/issues"
-# Documentation = "https://readthedocs.org"
+Documentation = "https://mutadock.readthedocs.io/en/latest/"
