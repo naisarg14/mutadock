@@ -45,7 +45,7 @@ pip install -r requirements.txt
 ## Usage
 Here's a brief guide to using MUTADOCK:
 
-1. Featured Commands:
+1. Common Commands:
 ```
 md_mutate --input <input_file> --output <output_file>
 ```

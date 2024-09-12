@@ -92,5 +92,26 @@ def permutations(n, r):
         return int(factorial(n) / factorial(n - r))
     
 
+def clean_pdb(pdb_file, pdb_clean=None):
+    from datetime import datetime
+    if not pdb_clean:
+        pdb_clean = pdb_file.replace(".pdb", "_clean.pdb")
+        
+    try:
+        with open(pdb_file, 'r') as infile, open(pdb_clean, 'w+') as outfile:
+            outfile.write("REMARK This file was cleaned using the clean_pdb function of mutadock library.\n")
+            outfile.write("REMARK All non-ATOM lines were removed.\n")
+            outfile.write(f"REMARK Created on {datetime.now().strftime('%b-%d-%Y %H:%M:%S')}\n")
+            for line in infile:
+                if line.startswith("ATOM") or line.startswith("TER"):
+                    outfile.write(line)
+                elif line.strip() == "END":
+                    outfile.write(line)
+                    break
+        return (True, pdb_clean)
+    except Exception as e:
+        return (False, e)
+
+
 if __name__ == "__main__":
     print("This file only contains functions used in other scripts.")

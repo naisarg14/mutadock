@@ -25,7 +25,7 @@ from csv_sort import sort_csv
 from ddg_calc_double import calc_double_ddg
 from ddg_calc_triple import calc_triple_ddg
 from generate_mutants import generate_single_mutation, generate_double_mutation, generate_triple_mutation
-from helpers import backup, file_info, permutations
+from helpers import backup, file_info, permutations, clean_pdb
 from contextlib import contextmanager
 
 
@@ -44,6 +44,14 @@ def naisarg():
     start_time = time.time()
     full_pdb_path, num_double_ddg, num_single_mut, num_double_mut, num_triple_ddg, num_triple_mut, append, quiet = get_inputs()
 
+    #Clean the PDB file
+    if not quiet: print(f"Cleaning the PDB file {full_pdb_path}")
+    cleaned_pdb = f"{full_pdb_path.removesuffix('.pdb')}_clean.pdb"
+    with suppress_stdout():
+        clean_pdb(full_pdb_path, cleaned_pdb)
+    if not quiet: print(f"PDB file cleaned successfully and saved as {cleaned_pdb}.")
+
+    full_pdb_path = cleaned_pdb
 
     # Generates possible mutations
     if not quiet: print(f"Generating mutations list for {full_pdb_path}")
