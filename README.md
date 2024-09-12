@@ -30,7 +30,7 @@ cd MUTADOCK
 ```
 
 
-3. Install dependencies including Pyrosetta:
+2. Install dependencies including Pyrosetta:
 
 - For Linux:
 ```
@@ -43,7 +43,7 @@ win_install.bat
 ```
 
 
-3. Install dependencies without PyRosetta (PyRosetta is required and should be installed seperately):
+2. Install dependencies without PyRosetta (PyRosetta is required and should be installed seperately):
 ```
 pip install -r requirements.txt
 ```

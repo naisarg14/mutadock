@@ -54,7 +54,7 @@ Navigate to the project directory:
 
    cd MUTADOCK
 
-3. Install dependencies including Pyrosetta:
+2. Install dependencies including Pyrosetta:
 
 -  For Linux:
 
@@ -68,7 +68,7 @@ Navigate to the project directory:
 
    win_install.bat
 
-3. Install dependencies without PyRosetta (PyRosetta is required and
+2. Install dependencies without PyRosetta (PyRosetta is required and
    should be installed seperately):
 
 ::
