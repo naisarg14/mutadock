@@ -67,5 +67,4 @@ def mutate_residue(pose, mutant_position, mutant_aa, pack_radius, pack_scorefxn)
 
 
 if __name__ == "__main__":
-    import sys
-    sys.exit("This file only contains functions used in other libraries.")
+    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")

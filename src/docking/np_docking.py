@@ -165,8 +165,6 @@ def prepare_inputs():
     print("Ligands file:", ligand_txt)
     print("Config file:", config)
     for f in [receptor_txt, ligand_txt]:
-        if not f.endswith(".txt"):
-            f = f"{f}.txt"
         if not os.path.exists(f):
             print(f"{f} not found or cannot be opened.")
     try:

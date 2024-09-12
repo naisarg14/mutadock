@@ -48,7 +48,7 @@ except ImportError:
 
 
 def main():
-    sys.exit("Dependency for np_dock and np_mutation")
+    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
 
 def generate_single_mutation(pdb_file, csv_file, total=0, folder=None, text_file=None):
     if int(total) == 0:
