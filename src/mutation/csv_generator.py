@@ -20,9 +20,19 @@
 
 import csv, os, sys
 from Amino import get_dict, get_scfn_250
-from Bio.PDB import PDBParser
 from helpers import backup
 import argparse
+
+try:
+    from Bio.PDB import PDBParser
+except ImportError:
+    msg = "Error with importing biopython module for mutation using mutadock.\n"
+    msg += "Easiest way to fix this is to install biopython using the following command:\n\n"
+    msg += "python -m pip install biopython\n"
+    msg += "If you already have biopython installed, please check the installation.\n"
+    msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+    print(msg)
+    sys.exit(2)
 
 
 def main():

@@ -114,4 +114,4 @@ def clean_pdb(pdb_file, pdb_clean=None):
 
 
 if __name__ == "__main__":
-    print("This file only contains functions used in other scripts.")
+    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's mutation module.")

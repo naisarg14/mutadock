@@ -93,7 +93,17 @@ def calculate_radius(pdb_file):
     return max_distance
 
 def vina_split(input_file, output_file=None):
-    from meeko import PDBQTMolecule, RDKitMolCreate
+    try:
+        import sys
+        from meeko import PDBQTMolecule, RDKitMolCreate
+    except ModuleNotFoundError:
+        msg = "Error with importing modules for preparing ligand files for Docking.\n"
+        msg += "Easaies way to fix this is to install meeko using the following command:\n\n"
+        msg += "python -m pip install meeko\n"
+        msg += "If you already have meeko installed, please check the installation.\n"
+        msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+        print(msg)
+        sys.exit(2)
 
     if output_file is None:
         output_file = input_file.replace('.pdbqt', '_ligand_1.sdf')
@@ -116,7 +126,7 @@ def vina_split(input_file, output_file=None):
         msg += "require a REMARK SMILES line in the PDBQT, which is added automatically by meeko."
         raise RuntimeError(msg)
 
-    footer_string = f"> <Docking Score>\n{score}\n> <Credits>\nCreated using a script written by Naisarg Patel (Github:@naisarg14) for VIT's iGEM team.\n$$$$\n"
+    footer_string = f"> <Docking Score>\n{score}\n> <Credits>\nCreated using a script in mutadock library written by Naisarg Patel (https://github.com/naisarg14/mutadock).\n$$$$\n"
     with open(output_file, 'w') as outfile:
         outfile.write(sdf_string.replace('$$$$', footer_string))
     
@@ -166,7 +176,6 @@ def prepare_ligand(in_file, out_file=None):
     return (True, pdbqt_string)
 
 def prepare_receptor(receptor_filename, outputfilename="None"):
-    #python -m pip install git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3
     try:
         import sys, os
         from MolKit import Read
@@ -245,11 +254,6 @@ def add_score_to_csv(out_pdb, csv_file, score):
         with open(csv_file, "r") as lc:
             final_line = lc.readlines()[-1]
             count = int(final_line.split(",")[0]) + 1
-        name = f"{os.path.basename(out_pdb).removesuffix('_out.pdb')}"
-        with open(csv_file, "a+") as out:
-            writer = csv.DictWriter(out, fieldnames=["sr", "name", "affinity"])
-            writer.writerow({"sr": count, "name": name, "affinity": score})
-        return (True, name)
     except FileNotFoundError:
         count = 1
     except ValueError:
@@ -257,10 +261,21 @@ def add_score_to_csv(out_pdb, csv_file, score):
     except Exception as e:
         return (False, e)
     
-def read_config(config):
+    try:
+        name = f"{os.path.basename(out_pdb).removesuffix('_out.pdb')}"
+        with open(csv_file, "a+") as out:
+            writer = csv.DictWriter(out, fieldnames=["sr", "name", "affinity"])
+            writer.writerow({"sr": count, "name": name, "affinity": score})
+    
+    except Exception as e:
+        return (False, e)
+        
+    return (True, name)
+    
+def read_config(config_file):
     try:
         config = {}
-        with open(config, 'r') as file:
+        with open(config_file, 'r') as file:
             for line in file:
                 line = line.strip()
                 if line and not line.startswith('#') and "=" in line:
@@ -296,9 +311,13 @@ def dock_vina(receptor, ligand, output, log_file, config=None, autosite=None, ce
     if autosite is not None:
         center = calculate_geometric_center(autosite)
     
-    import subprocess
+    import subprocess, os
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    vina_dock_script = os.path.join(current_dir, 'vina_dock.py')
+
     commands = [
-        "python3", "vina_dock.py", 
+        "python3", vina_dock_script, 
         "--receptor", receptor, 
         "--ligand", ligand, 
         "--output", output, 
@@ -309,28 +328,13 @@ def dock_vina(receptor, ligand, output, log_file, config=None, autosite=None, ce
         "--n_poses_write", str(n_poses_write),
         ]
     if not overwrite: commands.append("--nooverwrite")
-    with open(log_file, 'w') as log_file:
-        result = subprocess.run(commands, stdout=log_file, stderr=log_file, text=True) 
+    with open(log_file, 'w+') as lfile:
+        result = subprocess.run(commands, stdout=lfile, stderr=lfile, text=True) 
 
     if result.returncode != 0:
         return (False, f"Check the error in {log_file}")
 
     return (True, "")
 
-
-def main():
-    print("This is a dependency file for mutadock library's docking module.")
-
-
-
 if __name__ == "__main__":
-    main()
-
-
-
-
-
-#prepare_ligand("antheraxanthin.sdf")
-#prepare_receptor("BCH.pdbqt")
-#vina_dock("BCH.pdbqt", "antheraxanthin.pdbqt", "log.txt",exhaustiveness=4)
-#vina_split("dock_try.pdbqt")
+    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")

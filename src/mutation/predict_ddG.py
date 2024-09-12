@@ -17,14 +17,22 @@
 #  for more details.                                                           #
 ################################################################################
 
-
-from pyrosetta import *
-from pyrosetta.teaching import *
-from pyrosetta.rosetta.utility import vector1_bool
-from pyrosetta.rosetta.core.chemical import aa_from_oneletter_code
-from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
-from pyrosetta.rosetta.core.pack.task import TaskFactory
-
+try:
+    from pyrosetta import *
+    from pyrosetta.teaching import *
+    from pyrosetta.rosetta.utility import vector1_bool
+    from pyrosetta.rosetta.core.chemical import aa_from_oneletter_code
+    from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
+    from pyrosetta.rosetta.core.pack.task import TaskFactory
+except ImportError:
+    msg = "Error with importing pyrosetta module for mutation using mutadock.\n"
+    msg += "Easiest way to fix this is to install pyrosetta using the following command:\n\n"
+    msg += "python -m pip install pyrosetta_installer && python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'\n"
+    msg += "Alternative is to install from PyRosetta's official website.\n"
+    msg += "If you already have pyrosetta installed, please check the installation.\n"
+    msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+    print(msg)
+    sys.exit(2)
 
 def mutate_residue(pose, mutant_position, mutant_aa, pack_radius, pack_scorefxn):
     if pose.is_fullatom() == False:

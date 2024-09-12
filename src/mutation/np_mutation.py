@@ -166,7 +166,7 @@ def naisarg():
 
 
 def get_inputs():
-    parser = argparse.ArgumentParser(prog="np_mutation", description=None, epilog="Written by Naisarg Patel (https://github.com/naisarg14)")
+    parser = argparse.ArgumentParser(prog="np_mutation", description=None, epilog="Part of mutadock library. Written by Naisarg Patel (https://github.com/naisarg14)")
     parser.add_argument("-i",'--input', help="PDB File for predicting and generating mutations", metavar="PDB", required=True)
     parser.add_argument("-s", "--double", help="Number of Compounds for Double ddG", metavar="D", type=int, default=100)
     parser.add_argument("-t", "--triple", help="Number of Compounds for Triple ddG", metavar="T", type=int, default=40)
@@ -194,6 +194,7 @@ def get_inputs():
 
     if not file.endswith(".pdb"):
         sys.exit("Given file is not a PDB file, input should be a PDB file.")
+
 
     return full_pdb_path, args.double, args.spm, args.dpm, args.triple, args.tpm, args.noappend, args.quiet
 

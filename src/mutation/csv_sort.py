@@ -18,10 +18,21 @@
 ################################################################################
 
 
-import pandas as pd
 from helpers import backup
 import sys, os
 import argparse
+
+try:
+    import pandas as pd
+except ImportError:
+    msg = "Error with importing pandas module for mutation using mutadock.\n"
+    msg += "Easiest way to fix this is to install pandas using the following command:\n\n"
+    msg += "python -m pip install pandas\n"
+    msg += "If you already have pandas installed, please check the installation.\n"
+    msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+    print(msg)
+    sys.exit(2)
+
 
 def main():
     parser = argparse.ArgumentParser(description="This program takes as input a CSV file and sorts it according to the coloumn given.", epilog="Written by Naisarg Patel (https://github.com/naisarg14)")

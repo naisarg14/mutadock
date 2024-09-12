@@ -18,13 +18,34 @@
 ################################################################################
 
 
-from pyrosetta import *
 import predict_ddG
 import csv
 from itertools import combinations
 from helpers import backup, Mutation
-from tqdm import tqdm
 import os, sys, argparse
+
+try:
+    from pyrosetta import *
+except ImportError:
+    msg = "Error with importing pyrosetta module for mutation using mutadock.\n"
+    msg += "Easiest way to fix this is to install pyrosetta using the following command:\n\n"
+    msg += "python -m pip install pyrosetta_installer && python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'\n"
+    msg += "Alternative is to install from PyRosetta's official website.\n"
+    msg += "If you already have pyrosetta installed, please check the installation.\n"
+    msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+    print(msg)
+    sys.exit(2)
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    msg = "Error with importing tqdm module for mutation using mutadock.\n"
+    msg += "Easiest way to fix this is to install tqdm using the following command:\n\n"
+    msg += "python -m pip install tqdm\n"
+    msg += "If you already have tqdm installed, please check the installation.\n"
+    msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+    print(msg)
+    sys.exit(2)
 
 
 def main():

@@ -18,12 +18,33 @@
 ################################################################################
 
 
-from pyrosetta import *
-from pyrosetta.toolbox import mutate_residue
 import csv, os, sys
 import helpers
 from Amino import get_1
-from tqdm import tqdm
+
+try:
+    from pyrosetta import *
+    from pyrosetta.toolbox import mutate_residue
+except ImportError:
+    msg = "Error with importing pyrosetta module for mutation using mutadock.\n"
+    msg += "Easiest way to fix this is to install pyrosetta using the following command:\n\n"
+    msg += "python -m pip install pyrosetta_installer && python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'\n"
+    msg += "Alternative is to install from PyRosetta's official website.\n"
+    msg += "If you already have pyrosetta installed, please check the installation.\n"
+    msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+    print(msg)
+    sys.exit(2)
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    msg = "Error with importing tqdm module for mutation using mutadock.\n"
+    msg += "Easiest way to fix this is to install tqdm using the following command:\n\n"
+    msg += "python -m pip install tqdm\n"
+    msg += "If you already have tqdm installed, please check the installation.\n"
+    msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
+    print(msg)
+    sys.exit(2)
 
 
 def main():
