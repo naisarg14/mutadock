@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutadock"
-version = "1.1"
+version = "1.2"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
@@ -14,14 +14,15 @@ readme = "README.md"
 license = {text = "GPL-3.0"}
 keywords = ["Biology", "Mutation", "Docking", "Bioinformatics"]
 dependencies = [
-  'pyrosetta-distributed'==0.0.3
-  'biopython'==1.84
-  'meeko'==0.5.0
-  'numpy'==2.1.1
-  'pyrosetta-installer'==0.1.1
-  'tqdm'==4.66.5
-  'vina'==1.2.5
+  'pyrosetta-distributed==0.0.3',
+  'biopython==1.84',
+  'meeko==0.5.0',
+  'numpy==2.1.1',
+  'pyrosetta-installer==0.1.1',
+  'tqdm==4.66.5',
+  'vina==1.2.5'
 ]
+
 
 classifiers = [
   "Development Status :: 4 - Beta",
