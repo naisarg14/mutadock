@@ -9,10 +9,10 @@ version = "1.0"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
-description = "#TODO"
+description = "#MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking."
 readme = "README.md"
 license = {text = "GPL-3.0"}
-keywords = ["egg", "bacon", "sausage", "tomatoes", "Lobster Thermidor"] #TODO
+keywords = ["biology", "mutation", "docking", "bioinformatics", "proteins"]
 dependencies = [
   "tqdm",
   "vina",
