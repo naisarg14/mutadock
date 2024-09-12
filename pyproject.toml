@@ -12,7 +12,7 @@ authors = [
 description = "MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking."
 readme = "README.md"
 license = {text = "GPL-3.0"}
-keywords = ["biology", "mutation", "docking", "bioinformatics", "proteins"]
+keywords = ["Biology", "Mutation", "Docking", "Bioinformatics"]
 dependencies = [
   'pyrosetta-distributed'==0.0.3
   'biopython'==1.84
