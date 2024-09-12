@@ -11,13 +11,20 @@ MUTADOCK is a comprehensive library designed for mutation studies and multiple r
 ## Installation
 To install MUTADOCK, follow these steps:
 
+1. Install using pip
+```
+pip install mutadock
+```
+
+### OR
+
 1. Clone the repository:
 ```
 git clone https://github.com/naisarg14/mutadock.git
 ```
 
 
-2. Navigate to the project directory:
+Navigate to the project directory:
 ```
 cd MUTADOCK
 ```
@@ -54,7 +61,7 @@ md_dock --input <receptor_txt> --output <ligand_txt> --config <config_file>
 ```
 
 
-<!-- 2. For more detailed usage options, see the [documentation](link-to-documentation). -->
+2. For more detailed usage options, see the [documentation](https://mutadock.readthedocs.io/en/latest/).
 
 
 ## License

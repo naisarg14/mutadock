@@ -5,18 +5,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutadock"
-version = "1.0"
+version = "1.1"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
-description = "#MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking."
+description = "MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking."
 readme = "README.md"
 license = {text = "GPL-3.0"}
 keywords = ["biology", "mutation", "docking", "bioinformatics", "proteins"]
 dependencies = [
-  "tqdm",
-  "vina",
-  "meeko"
+  'pyrosetta-distributed'==0.0.3
+  'biopython'==1.84
+  'meeko'==0.5.0
+  'numpy'==2.1.1
+  'pyrosetta-installer'==0.1.1
+  'tqdm'==4.66.5
+  'vina'==1.2.5
 ]
 
 classifiers = [

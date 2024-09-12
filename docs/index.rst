@@ -9,7 +9,6 @@ MutaDock documentation
    :maxdepth: 2
    :caption: Contents:
 
-
 Overview
 --------
 
@@ -34,13 +33,22 @@ Installation
 
 To install MUTADOCK, follow these steps:
 
+1. Install using pip
+
+::
+
+   pip install mutadock
+
+OR
+~~
+
 1. Clone the repository:
 
 ::
 
    git clone https://github.com/naisarg14/mutadock.git
 
-2. Navigate to the project directory:
+Navigate to the project directory:
 
 ::
 
@@ -82,9 +90,8 @@ Here’s a brief guide to using MUTADOCK:
 
    md_dock --input <receptor_txt> --output <ligand_txt> --config <config_file>
 
-.. raw:: html
-
-   <!-- 2. For more detailed usage options, see the [documentation](link-to-documentation). -->
+2. For more detailed usage options, see the
+   `documentation <https://mutadock.readthedocs.io/en/latest/>`__.
 
 License
 -------
@@ -103,4 +110,3 @@ Acknowledgments
 
 -  Thanks to the contributors and libraries that made this project
    possible.
-
