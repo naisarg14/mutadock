@@ -27,6 +27,7 @@ def vina_dock(receptor, ligand, output, center=[0, 0, 0], box_size=[30, 30, 30],
         msg = "Error with importing modules for docking using Vina.\n"
         msg += "Easiest way to fix this is to install vina using the following command:\n\n"
         msg += "python -m pip install vina\n"
+        msg += "But this leads to errors from vina's side, please check \'https://autodock-vina.readthedocs.io/en/latest/installation.html\' for steps to install vina.\n"
         msg += "If you already have vina installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
         print(msg)

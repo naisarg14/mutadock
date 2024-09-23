@@ -46,17 +46,17 @@ def read_pdb_file(file_path):
                     match = re.match(pattern, line)
                 if match:
                     parts = {
-                        "atom_serial_number": int(match.group(1)),  # Atom Serial Number
-                        "atom_name": match.group(2).strip(),        # Atom Name
-                        "residue_name": match.group(3).strip(),     # Residue Name
-                        "chain_id": match.group(4).strip() or None, # Chain Identifier (optional)
-                        "residue_sequence_number": int(match.group(5)),  # Residue Sequence Number
-                        "x": float(match.group(6)),                 # X Coordinate
-                        "y": float(match.group(7)),                 # Y Coordinate
-                        "z": float(match.group(8)),                 # Z Coordinate
-                        "occupancy": float(match.group(9)),         # Occupancy
-                        "temp_factor": float(match.group(10)),      # Temperature Factor
-                        "extra_factor": float(match.group(11)) if match.group(11) else None,  # Extra Factor (optional)
+                        "atom_serial_number": int(match.group(1)),
+                        "atom_name": match.group(2).strip(),
+                        "residue_name": match.group(3).strip(),
+                        "chain_id": match.group(4).strip() or None,
+                        "residue_sequence_number": int(match.group(5)),
+                        "x": float(match.group(6)),
+                        "y": float(match.group(7)),
+                        "z": float(match.group(8)),
+                        "occupancy": float(match.group(9)),
+                        "temp_factor": float(match.group(10)),
+                        "extra_factor": float(match.group(11)) if match.group(11) else None,
                     }
                     atoms.append(parts)
         return (atoms)
@@ -150,9 +150,9 @@ def prepare_ligand(in_file, out_file=None):
         #Add support for PDB files
         if out_file is None:
             if in_file.endswith(".sdf"):
-                out_file = f"{in_file.removesuffix(".sdf")}.pdbqt"
+                out_file = f"{in_file.removesuffix('.sdf')}.pdbqt"
             elif in_file.endswith(".mol2"):
-                out_file = f"{in_file.removesuffix(".mol2")}.pdbqt"
+                out_file = f"{in_file.removesuffix('.mol2')}.pdbqt"
             else:
                 return (False, "Input file is not in SDF or MOL2 format.")
         
@@ -183,7 +183,7 @@ def prepare_receptor(receptor_filename, outputfilename="None"):
     except ModuleNotFoundError:
         msg = "Error with importing modules for preparing receptor files for Docking.\n"
         msg += "Easaies way to fix this is to install AutoDockTools_py3 using the following command:\n\n"
-        msg += "python -m pip install git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3\n"
+        msg += "\'python -m pip install git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3\'\n"
         msg += "If you already have AutoDockTools_py3 installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
         print(msg)
@@ -198,7 +198,6 @@ def prepare_receptor(receptor_filename, outputfilename="None"):
         if outputfilename is None:
             outputfilename = f"{receptor_filename}qt"
         
-        # initialize required parameters
         repairs = 'hydrogens'
         charges_to_add = 'gasteiger'
         cleanup  = "waters"
@@ -217,7 +216,6 @@ def prepare_receptor(receptor_filename, outputfilename="None"):
                         at.name = at.name + str(at._uniqIndex +1)
 
             if len(mols)>1:
-                #use the molecule with the most atoms
                 ctr = 1
                 for m in mols[1:]:
                     ctr += 1
