@@ -20,17 +20,22 @@ Key Features
 Automated Protein Mutation:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
 * Utilizes PyRosetta for systematic protein mutations.
 * Supports various mutation strategies (e.g., single-point mutations, double-point mutations and triple-point mutations).
 * Allows customization of mutation and docking parameters.
-  #### Docking Library:
+
+Docking Library:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 * Capable of docking a list of proteins against a list of ligands.
 * Employs AutoDock Vina to predict binding affinities and best poses.
 * Provides detailed output files with docking scores and poses.
-  #### User Interface:
-* Command-Line Interface: Simple CLI for both beginner and expert users.
-* Python Bindings: The library can be imported in other codes for increased customizability by expert users
+
+User Interface:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* **Command-Line Interface:** Simple CLI for both beginner and expert users.
+* **Python Bindings:** The library can be imported in other codes for increased customizability by expert users
 
 Try it Now
 ----------
