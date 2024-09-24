@@ -35,102 +35,306 @@
 <h1>MutaDock documentation<a class="headerlink" href="#mutadock-documentation" title="Link to this heading">¶</a></h1>
 <div class="toctree-wrapper compound">
 </div>
-<section id="overview">
-<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
-<p>MUTADOCK is a comprehensive library designed for mutation studies and
-multiple receptor-ligand docking. It provides tools and methods to
-analyze and predict the effects of mutations on receptor-ligand
-interactions, enabling researchers to study protein function and drug
-binding affinity in a detailed manner.</p>
+<section id="introduction">
+<h2>Introduction<a class="headerlink" href="#introduction" title="Link to this heading">¶</a></h2>
+<p>MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking. It provides tools and methods to analyze and predict the effects of mutations on receptor-ligand interactions, enabling researchers to study protein function and drug binding affinity in a detailed manner.</p>
+<section id="description">
+<h3>Description<a class="headerlink" href="#description" title="Link to this heading">¶</a></h3>
+<p>Our software is designed to facilitate protein mutation analysis and molecular docking. It integrates automated protein mutation using PyRosetta and a docking library capable of docking multiple proteins with multiple ligands.</p>
 </section>
-<section id="features">
-<h2>Features<a class="headerlink" href="#features" title="Link to this heading">¶</a></h2>
+<section id="key-features">
+<h3>Key Features<a class="headerlink" href="#key-features" title="Link to this heading">¶</a></h3>
+<section id="automated-protein-mutation">
+<h4>Automated Protein Mutation:<a class="headerlink" href="#automated-protein-mutation" title="Link to this heading">¶</a></h4>
 <ul class="simple">
-<li><p>Mutation Studies: Analyze the impact of various mutations on protein
-structure and function.</p></li>
-<li><p>Multiple Receptor-Ligand Docking: Perform docking simulations
-involving multiple receptor and ligand combinations.</p></li>
-<li><p>User-Friendly Interface: Easy-to-use commands and functions for quick
-analysis and simulations.</p></li>
+<li><p>Utilizes PyRosetta for systematic protein mutations.</p></li>
+<li><p>Supports various mutation strategies (e.g., single-point mutations, double-point mutations and triple-point mutations).</p></li>
+<li><p>Allows customization of mutation and docking parameters.
+#### Docking Library:</p></li>
+<li><p>Capable of docking a list of proteins against a list of ligands.</p></li>
+<li><p>Employs AutoDock Vina to predict binding affinities and best poses.</p></li>
+<li><p>Provides detailed output files with docking scores and poses.
+#### User Interface:</p></li>
+<li><p>Command-Line Interface: Simple CLI for both beginner and expert users.</p></li>
+<li><p>Python Bindings: The library can be imported in other codes for increased customizability by expert users</p></li>
 </ul>
 </section>
+</section>
+</section>
+<section id="try-it-now">
+<h2>Try it Now<a class="headerlink" href="#try-it-now" title="Link to this heading">¶</a></h2>
+<p>The basic codes to perform mutation studies as used by us for our project can be found in a Jupyter Notebook here. The same notebook can be found on collab here.</p>
+</section>
+<section id="how-to-guide">
+<h2>How To Guide<a class="headerlink" href="#how-to-guide" title="Link to this heading">¶</a></h2>
 <section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
-<p>To install MUTADOCK, follow these steps:</p>
-<ol class="arabic simple">
-<li><p>Install using pip</p></li>
-</ol>
+<h3>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h3>
+<p>MutaDock has been deployed on PyPi, making installation quick and simple</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">mutadock</span>
 </pre></div>
 </div>
-<section id="or">
-<h3>OR<a class="headerlink" href="#or" title="Link to this heading">¶</a></h3>
-<ol class="arabic simple">
-<li><p>Clone the repository:</p></li>
-</ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">naisarg14</span><span class="o">/</span><span class="n">mutadock</span><span class="o">.</span><span class="n">git</span>
-</pre></div>
-</div>
-<p>Navigate to the project directory:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="n">MUTADOCK</span>
-</pre></div>
-</div>
-<ol class="arabic simple" start="2">
-<li><p>Install dependencies including Pyrosetta:</p></li>
-</ol>
-<ul class="simple">
-<li><p>For Linux:</p></li>
-</ul>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">./</span><span class="n">install</span><span class="o">.</span><span class="n">sh</span>
+<p>The Pyrosetta Installer will be automatically installed but Pyrosetta should be installed using</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="o">-</span><span class="n">c</span> <span class="s1">&#39;import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()&#39;</span>
 </pre></div>
 </div>
 <ul class="simple">
-<li><p>For Windows:</p></li>
+<li><p>Currently there is a problem with the vina on PyPi, so vina needs to be installed separately, the installation guide can be found at <a class="reference external" href="https://autodock-vina.readthedocs.io/en/latest/installation.html">https://autodock-vina.readthedocs.io/en/latest/installation.html</a></p></li>
 </ul>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">win_install</span><span class="o">.</span><span class="n">bat</span>
+</section>
+<section id="mutation-studies">
+<h3>Mutation Studies<a class="headerlink" href="#mutation-studies" title="Link to this heading">¶</a></h3>
+<p>Mutation Studies for a protein is a very fast process with just a PDB file of the protein as the input. (We assume for the tutorial that the name of the PDB file is “protein.pdb”)</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">md_mutate</span> <span class="o">-</span><span class="n">i</span> <span class="n">protein</span><span class="o">.</span><span class="n">pdb</span>
 </pre></div>
 </div>
-<ol class="arabic simple" start="2">
-<li><p>Install dependencies without PyRosetta (PyRosetta is required and
-should be installed seperately):</p></li>
+<p>Other optional arguments can be changed as required, to check the usage run</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">md_mutate</span> <span class="o">-</span><span class="n">h</span>
+</pre></div>
+</div>
+<p>The md_mutate will output CSV files and one text file, their description is in the table below:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>No.</strong></p></th>
+<th class="head"><p><strong>File Name</strong></p></th>
+<th class="head"><p><strong>Description</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><ol class="arabic simple">
+<li></li>
 </ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="o">-</span><span class="n">r</span> <span class="n">requirements</span><span class="o">.</span><span class="n">txt</span>
+</td>
+<td><p>protein_modified_mutations_all.csv</p></td>
+<td><p>Contains all possible mutations for the given protein</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="2">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_mutations.csv</p></td>
+<td><p>Contains mutations that are possible according to the PAM matrix for the given protein</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="3">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_mutations_ddG.csv</p></td>
+<td><p>The single mutation ddG values for the mutation in the File-2</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="4">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_mutations_ddG_sorted.csv</p></td>
+<td><p>Sorted File-3 from lowest to highest ddG values</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="5">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_double_ddg.csv</p></td>
+<td><p>The ddG values of the double mutation for all the combinations of the most negative single ddG compounds</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="6">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_double_ddg_sorted.csv</p></td>
+<td><p>Sorted File-5 from lowest to highest ddG values</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="7">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_triple_ddg.csv</p></td>
+<td><p>The ddG values of the triple mutation for all the combinations of the most negative double ddG compounds</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="8">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_triple_ddg_sorted.csv</p></td>
+<td><p>Sorted File-7 from lowest to highest ddG values</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="9">
+<li></li>
+</ol>
+</td>
+<td><p>protein_modified_mutants.txt</p></td>
+<td><p>Generates a list of all the mutated PDB files created. Can be directly used as input for the md_dock command in our mutadock library</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="docking-studies">
+<h3>Docking Studies<a class="headerlink" href="#docking-studies" title="Link to this heading">¶</a></h3>
+<p>Docking for multiple receptors and ligands is made simple and efficient by mutadock. The text files containing the names of the receptors and ligands need to be given as input, after that everything is automated. (If md_mutate is used, the text file for receptor is generated automatically)
+Every receptor in the receptor file will be docked with every ligand in the ligand file. A standard Vina configuration file or an AutoSIte prediction output is required.
+Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">md_dock</span> <span class="o">-</span><span class="n">r</span> <span class="n">receptors</span><span class="o">.</span><span class="n">txt</span> <span class="o">-</span><span class="n">l</span> <span class="n">ligands</span><span class="o">.</span><span class="n">txt</span> <span class="o">-</span><span class="n">c</span> <span class="n">config</span><span class="o">.</span><span class="n">txt</span>
 </pre></div>
 </div>
+<p>Other optional arguments can be changed as required, to check the usage run</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">md_dock</span> <span class="o">-</span><span class="n">h</span>
+</pre></div>
+</div>
+<p>The output of md_dock with their description is in the table below:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>No.</strong></p></th>
+<th class="head"><p><strong>Output</strong></p></th>
+<th class="head"><p><strong>Description</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><ol class="arabic simple">
+<li></li>
+</ol>
+</td>
+<td><p>PDBQT files</p></td>
+<td><p>The receptors and ligands will be converted to PDBQT files for AutoDock Vina.</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="2">
+<li></li>
+</ol>
+</td>
+<td><p>Output Log</p></td>
+<td><p>The output of AutoDock Vina with the docking scores will be stored in a log file for each combination.</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="3">
+<li></li>
+</ol>
+</td>
+<td><p>Output PDB</p></td>
+<td><p>The output of AutoDock Vina with the 5 best docking poses will be stored in a PDB file for each combination.</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="4">
+<li></li>
+</ol>
+</td>
+<td><p>Output PDBQT</p></td>
+<td><p>The output of AutoDock Vina Split with the best pose will be stored in a PDBQT file for each combination.</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="5">
+<li></li>
+</ol>
+</td>
+<td><p>Output SDF</p></td>
+<td><p>The best pose after docking will be stored in a SDF file for visualization and better usability.</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="6">
+<li></li>
+</ol>
+</td>
+<td><p>Docking Results CSV</p></td>
+<td><p>All the docking affinities are tabulated in a CSV to make analysis trivial.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="all-cli-scripts">
+<h3>All CLI Scripts<a class="headerlink" href="#all-cli-scripts" title="Link to this heading">¶</a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p><strong>No.</strong></p></th>
+<th class="head"><p><strong>Command</strong></p></th>
+<th class="head"><p><strong>Description</strong></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><ol class="arabic simple">
+<li></li>
+</ol>
+</td>
+<td><p>md_mutate</p></td>
+<td><p>Predicts the best mutation of the given protein</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="2">
+<li></li>
+</ol>
+</td>
+<td><p>md_dock</p></td>
+<td><p>Docked all combinations from a list of receptors and ligands</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="3">
+<li></li>
+</ol>
+</td>
+<td><p>md_vina_dock</p></td>
+<td><p>CLI for AutoDock Vina</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="4">
+<li></li>
+</ol>
+</td>
+<td><p>md_csv_generator</p></td>
+<td><p>Generates all possible mutations for a protein and also the mutations possible according to PAM Matrix</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="5">
+<li></li>
+</ol>
+</td>
+<td><p>md_csv_sort</p></td>
+<td><p>Can sort any CSV file according to the column name or number chosen</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="6">
+<li></li>
+</ol>
+</td>
+<td><p>md_ddg_single</p></td>
+<td><p>Calculates single ddG values for a given CSV of mutations</p></td>
+</tr>
+<tr class="row-even"><td><ol class="arabic simple" start="7">
+<li></li>
+</ol>
+</td>
+<td><p>md_ddg_double</p></td>
+<td><p>Calculates double ddG values for all combinations using a given CSV of mutations</p></td>
+</tr>
+<tr class="row-odd"><td><ol class="arabic simple" start="8">
+<li></li>
+</ol>
+</td>
+<td><p>md_ddg_triple</p></td>
+<td><p>Calculates triple ddG values for all combinations using a given CSV of mutations</p></td>
+</tr>
+</tbody>
+</table>
 </section>
 </section>
-<section id="usage">
-<h2>Usage<a class="headerlink" href="#usage" title="Link to this heading">¶</a></h2>
-<p>Here’s a brief guide to using MUTADOCK:</p>
-<ol class="arabic simple">
-<li><p>Common Commands:</p></li>
-</ol>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">md_mutate</span> <span class="o">--</span><span class="nb">input</span> <span class="o">&lt;</span><span class="n">input_file</span><span class="o">&gt;</span> <span class="o">--</span><span class="n">output</span> <span class="o">&lt;</span><span class="n">output_file</span><span class="o">&gt;</span>
-</pre></div>
-</div>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">md_dock</span> <span class="o">--</span><span class="nb">input</span> <span class="o">&lt;</span><span class="n">receptor_txt</span><span class="o">&gt;</span> <span class="o">--</span><span class="n">output</span> <span class="o">&lt;</span><span class="n">ligand_txt</span><span class="o">&gt;</span> <span class="o">--</span><span class="n">config</span> <span class="o">&lt;</span><span class="n">config_file</span><span class="o">&gt;</span>
-</pre></div>
-</div>
-<ol class="arabic simple" start="2">
-<li><p>For more detailed usage options, see the
-<a class="reference external" href="https://mutadock.readthedocs.io/en/latest/">documentation</a>.</p></li>
-</ol>
+<section id="applications">
+<h2>Applications<a class="headerlink" href="#applications" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Protein Engineering:</strong> Designing mutated proteins with enhanced stability or new functionalities.</p></li>
+<li><p><strong>Drug Discovery:</strong> Screening potential drug candidates by predicting binding affinities.</p></li>
+<li><p><strong>Biochemical Research:</strong> Studying protein-ligand interactions to understand biological processes.</p></li>
+</ul>
 </section>
-<section id="license">
-<h2>License<a class="headerlink" href="#license" title="Link to this heading">¶</a></h2>
-<p>This project is licensed under the GNU General Public License v3.0
-(GPL-3.0). See the <a class="reference external" href="LICENSE">LICENSE</a> file for details.</p>
+<section id="documentation">
+<h2>Documentation<a class="headerlink" href="#documentation" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>README is included in the repository to serve as a comprehensive guide</p></li>
+<li><p>ReadtheDocs Page for updated documentation can be found <a class="reference external" href="https://mutadock.readthedocs.io/en/latest/#">here</a></p></li>
+</ul>
+</section>
+<section id="future-developments">
+<h2>Future Developments<a class="headerlink" href="#future-developments" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><strong>Developing a Graphical User Interface (GUI):</strong> Enhancing user experience by providing a user-friendly interface for easier interaction with the software.</p></li>
+<li><p><strong>Creating a Web Server:</strong> Allowing remote access and usage of the software through a web-based platform, making it accessible from anywhere.</p></li>
+<li><p><strong>Increasing Parameter Customizability:</strong> Offering more options for users to fine-tune mutation and docking parameters to suit specific research needs and conditions.</p></li>
+</ul>
+</section>
+<section id="acknowledgements">
+<h2>Acknowledgements<a class="headerlink" href="#acknowledgements" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p>Open-source tools and libraries used in the development.</p></li>
+</ul>
 </section>
 <section id="contact">
 <h2>Contact<a class="headerlink" href="#contact" title="Link to this heading">¶</a></h2>
-<p>For any questions or feedback, please contact
-<a class="reference external" href="mailto:naisarg&#46;patel14&#37;&#52;&#48;hotmail&#46;com">naisarg<span>&#46;</span>patel14<span>&#64;</span>hotmail<span>&#46;</span>com</a>.</p>
-</section>
-<section id="acknowledgments">
-<h2>Acknowledgments<a class="headerlink" href="#acknowledgments" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p>Thanks to the contributors and libraries that made this project
-possible.</p></li>
+<li><p>For questions, suggestions, or collaboration, please contact <a class="reference external" href="mailto:naisarg&#46;patel14&#37;&#52;&#48;hotmail&#46;com">Naisarg Patel</a>.</p></li>
 </ul>
 </section>
 </section>
