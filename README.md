@@ -122,4 +122,4 @@ The output of md_dock with their description is in the table below:
 
 
 ## Contact
-- For questions, suggestions, or collaboration, please contact [Naisarg Patel](naisarg.patel14@hotmail.com).
+- For questions, suggestions, or collaboration, please contact [Naisarg Patel](mailto:naisarg.patel14@hotmail.com).
