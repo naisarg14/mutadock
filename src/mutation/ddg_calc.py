@@ -18,10 +18,10 @@
 ################################################################################
 
 
-import predict_ddG
+import mutation.predict_ddG as predict_ddG
 import csv, os, sys, argparse
-from Amino import get_1
-from helpers import backup
+from mutation.Amino import get_1
+from mutation.helpers import backup
 
 try:
     from pyrosetta import *

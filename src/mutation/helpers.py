@@ -21,7 +21,7 @@
 import os
 from datetime import datetime
 import shutil
-from Amino import check_3, get_1
+from mutation.Amino import check_3, get_1
 
 class Mutation():
     def __init__(self, chain, position, aa_old, aa_new):

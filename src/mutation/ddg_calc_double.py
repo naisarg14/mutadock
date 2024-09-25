@@ -18,10 +18,10 @@
 ################################################################################
 
 
-import predict_ddG
+import mutation.predict_ddG as predict_ddG
 import csv
 from itertools import combinations
-from helpers import backup, Mutation
+from mutation.helpers import backup, Mutation
 import os, sys, argparse
 
 try:

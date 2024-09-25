@@ -19,13 +19,13 @@
 
 
 import os, sys, time, argparse
-from csv_generator import generate_csv
-from ddg_calc import calc_ddg
-from csv_sort import sort_csv
-from ddg_calc_double import calc_double_ddg
-from ddg_calc_triple import calc_triple_ddg
-from generate_mutants import generate_single_mutation, generate_double_mutation, generate_triple_mutation
-from helpers import backup, file_info, permutations, clean_pdb
+from mutation.csv_generator import generate_csv
+from mutation.ddg_calc import calc_ddg
+from mutation.csv_sort import sort_csv
+from mutation.ddg_calc_double import calc_double_ddg
+from mutation.ddg_calc_triple import calc_triple_ddg
+from mutation.generate_mutants import generate_single_mutation, generate_double_mutation, generate_triple_mutation
+from mutation.helpers import backup, file_info, permutations, clean_pdb
 from contextlib import contextmanager
 
 

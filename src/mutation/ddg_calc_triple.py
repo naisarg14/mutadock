@@ -18,10 +18,10 @@
 ################################################################################
 
 
-import predict_ddG
+import mutation.predict_ddG as predict_ddG
 from itertools import combinations
-from Amino import get_1
-from helpers import backup
+from mutation.Amino import get_1
+from mutation.helpers import backup
 import os, sys, argparse, csv
 
 try:

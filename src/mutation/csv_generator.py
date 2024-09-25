@@ -19,8 +19,8 @@
 
 
 import csv, os, sys
-from Amino import get_dict, get_scfn_250
-from helpers import backup
+from mutation.Amino import get_dict, get_scfn_250
+from mutation.helpers import backup
 import argparse
 
 try:

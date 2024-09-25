@@ -19,8 +19,8 @@
 
 
 import csv, os, sys
-import helpers
-from Amino import get_1
+import mutation.helpers
+from mutation.Amino import get_1
 
 try:
     from pyrosetta import *

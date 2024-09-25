@@ -16,8 +16,8 @@ Our software is designed to facilitate protein mutation analysis and molecular d
 - Employs AutoDock Vina to predict binding affinities and best poses.
 - Provides detailed output files with docking scores and poses.
 #### User Interface:
-- Command-Line Interface: Simple CLI for both beginner and expert users.
-- Python Bindings: The library can be imported in other codes for increased customizability by expert users
+- **Command-Line Interface:** Simple CLI for both beginner and expert users.
+- **Python Bindings:** The library can be imported in other codes for increased customizability by expert users
 
 
 ## Try it Now

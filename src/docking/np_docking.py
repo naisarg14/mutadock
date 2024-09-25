@@ -22,7 +22,7 @@ import os, time, sys
 import argparse
 from contextlib import contextmanager
 from tqdm import tqdm
-from vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
+from docking.vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
 
 
 @contextmanager
@@ -132,7 +132,7 @@ def naisarg():
             
             with open(completed_name, "a+") as file: file.write(f"{combination}\n")
 
-            if not quiet: print(f"Docking completed, log file is {log_file}, ligand_1 is {ligand_1.replace("pdbqt", "sdf")}, docking affinity is {score}. \n")
+            if not quiet: print(f"Docking completed, log file is {log_file}, ligand_1 is {ligand_1.replace('.pdbqt', '.sdf')}, docking affinity is {score}. \n")
 
         except EOFError:
             continue
