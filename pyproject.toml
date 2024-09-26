@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutadock"
-version = "1.3"
+version = "1.5"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]

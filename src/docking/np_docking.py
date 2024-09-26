@@ -22,7 +22,7 @@ import os, time, sys
 import argparse
 from contextlib import contextmanager
 from tqdm import tqdm
-from docking.vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
+from vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
 
 
 @contextmanager
