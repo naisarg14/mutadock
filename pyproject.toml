@@ -5,20 +5,22 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutadock"
-version = "1.5"
+version = "1.9.2"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
-description = "MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking."
+description = "MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking. Refer to README for more information."
 readme = "README.md"
 license = {text = "GPL-3.0"}
 keywords = ["Biology", "Mutation", "Docking", "Bioinformatics"]
 dependencies = [
   'biopython==1.84',
   'meeko==0.5.0',
-  'numpy==2.1.1',
+  'numpy>=2.1.1',
   'pyrosetta-installer==0.1.1',
-  'tqdm==4.66.5',
+  'tqdm>=4.66.5',
+  'pyarrow==17.0.0',
+  'pandas==2.2.2',
 ]
 
 
@@ -44,14 +46,14 @@ classifiers = [
 packages = ["src/mutation", "src/docking"]
 
 [project.scripts]
-md_mutate = "mutation.np_mutation.py:main"
-md_dock = "docking.np_docking.py:main"
-md_vina_dock = "docking.vina_dock.py:main"
-md_csv_generator = "mutation.csv_generator.py:main"
-md_csv_sort = "mutation.csv_sort.py:main"
-md_ddg_single = "mutation.ddg_calc.py:main"
-md_ddg_double = "mutation.ddg_calc_double.py:main"
-md_ddg_triple = "mutation.ddg_calc_triple.py:main"
+md_mutate = "mutation.np_mutation:naisarg"
+md_dock = "docking.np_docking:naisarg"
+md_vina_dock = "docking.vina_dock:main"
+md_csv_generator = "mutation.csv_generator:main"
+md_csv_sort = "mutation.csv_sort:main"
+md_ddg_single = "mutation.ddg_calc:main"
+md_ddg_double = "mutation.ddg_calc_double:main"
+md_ddg_triple = "mutation.ddg_calc_triple:main"
 
 
 [project.urls]

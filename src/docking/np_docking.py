@@ -22,7 +22,7 @@ import os, time, sys
 import argparse
 from contextlib import contextmanager
 from tqdm import tqdm
-from vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
+from docking.vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
 
 
 @contextmanager
@@ -165,6 +165,8 @@ def prepare_inputs():
     print("Ligands file:", ligand_txt)
     print("Config file:", config)
     for f in [receptor_txt, ligand_txt]:
+        if f is None:
+            sys.exit(f"Error: Required Input Files not provided.")
         if not os.path.exists(f):
             print(f"{f} not found or cannot be opened.")
     try:

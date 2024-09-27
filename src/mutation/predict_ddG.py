@@ -25,6 +25,7 @@ try:
     from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
     from pyrosetta.rosetta.core.pack.task import TaskFactory
 except ImportError:
+    import sys
     msg = "Error with importing pyrosetta module for mutation using mutadock.\n"
     msg += "Easiest way to fix this is to install pyrosetta using the following command:\n\n"
     msg += "python -m pip install pyrosetta_installer && python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'\n"

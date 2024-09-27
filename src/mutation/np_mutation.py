@@ -199,7 +199,5 @@ def get_inputs():
     return full_pdb_path, args.double, args.spm, args.dpm, args.triple, args.tpm, args.noappend, args.quiet
 
 
-
-
 if __name__ == "__main__":
     naisarg()
