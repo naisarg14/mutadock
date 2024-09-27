@@ -1,6 +1,8 @@
 git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3.git
 biopython==1.84
 meeko==0.5.0
-numpy==2.1.1
+numpy>=2.1.1
 pyrosetta-installer==0.1.1
-tqdm==4.66.5
+tqdm>=4.66.5
+pyarrow==17.0.0
+pandas==2.2.2

@@ -2,10 +2,9 @@
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-
 [project]
 name = "mutadock"
-version = "1.9.2"
+version = "1.9.3"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
@@ -54,6 +53,7 @@ md_csv_sort = "mutation.csv_sort:main"
 md_ddg_single = "mutation.ddg_calc:main"
 md_ddg_double = "mutation.ddg_calc_double:main"
 md_ddg_triple = "mutation.ddg_calc_triple:main"
+md_install_dependencies = "mutation.install_dependencies:main"
 
 
 [project.urls]

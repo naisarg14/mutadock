@@ -58,7 +58,9 @@ The Pyrosetta Installer will be automatically installed but Pyrosetta should be 
 
 .. code-block::
 
-   python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'
+   md_install_dependencies
+
+this will install all dependencies including Pyrosetta.
 
 
 * Currently there is a problem with the vina on PyPi, so vina needs to be installed separately, the installation guide can be found at https://autodock-vina.readthedocs.io/en/latest/installation.html
