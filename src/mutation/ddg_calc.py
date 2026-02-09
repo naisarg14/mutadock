@@ -20,8 +20,16 @@
 
 import mutation.predict_ddG as predict_ddG
 import csv, os, sys, argparse
+import logging
 from mutation.Amino import get_1
 from mutation.helpers import backup
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 try:
     from pyrosetta import *
@@ -32,7 +40,7 @@ except ImportError:
     msg += "Alternative is to install from PyRosetta's official website.\n"
     msg += "If you already have pyrosetta installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 try:
@@ -43,7 +51,7 @@ except ImportError:
     msg += "python -m pip install tqdm\n"
     msg += "If you already have tqdm installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 
@@ -97,7 +105,7 @@ def get_inputs():
     out_csv = args.output
 
     if not os.path.isabs(pdb_file):
-        print(f"Assuming current directory for {pdb_file} as root since path not specified.")
+        logger.info(f"Assuming current directory for {pdb_file} as root since path not specified.")
         dir = os.getcwd()
         file = pdb_file
     else:
@@ -109,11 +117,11 @@ def get_inputs():
         sys.exit("No such file found in current directory, enter full path for other directories.")
 
     if not file.endswith(".pdb"):
-        print("Given file is not a PDB file, input should be a PDB file.")
+        logger.error("Given file is not a PDB file, input should be a PDB file.")
         sys.exit("Usage: python ddg_calc_double.py <PDB file> <single_csv> <total> (optional) <out_csv>")
     
     if not os.path.isabs(mut_csv):
-        print(f"Assuming current directory for {mut_csv} as root since path not specified.")
+        logger.info(f"Assuming current directory for {mut_csv} as root since path not specified.")
         dir = os.getcwd()
         file = mut_csv
     else:
@@ -125,7 +133,7 @@ def get_inputs():
         sys.exit("No such file found in current directory, enter full path for other directories.")
 
     if not file.endswith(".csv"):
-        print("Given file is not a CSV file, input should be a CSV file.")
+        logger.error("Given file is not a CSV file, input should be a CSV file.")
         sys.exit("Usage: python ddg_calc_double.py <PDB file> <single_csv> (optional) <out_csv>")
 
     return full_pdb_path, full_csv_path, out_csv

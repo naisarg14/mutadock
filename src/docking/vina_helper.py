@@ -18,6 +18,15 @@
 ################################################################################
 
 
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 def backup(file_path):
     import os
     from datetime import datetime
@@ -102,7 +111,7 @@ def vina_split(input_file, output_file=None):
         msg += "python -m pip install meeko\n"
         msg += "If you already have meeko installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-        print(msg)
+        logger.error(msg)
         sys.exit(2)
 
     if output_file is None:
@@ -143,7 +152,7 @@ def prepare_ligand(in_file, out_file=None):
         msg += "python -m pip install meeko rdkit\n"
         msg += "If you already have meeko and rdkit installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-        print(msg)
+        logger.error(msg)
         sys.exit(2)
 
     try:
@@ -186,7 +195,7 @@ def prepare_receptor(receptor_filename, outputfilename="None"):
         msg += "\'python -m pip install git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3\'\n"
         msg += "If you already have AutoDockTools_py3 installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-        print(msg)
+        logger.error(msg)
         sys.exit(2)
     finally:
         original_stdout = os.dup(1)
@@ -226,7 +235,7 @@ def prepare_receptor(receptor_filename, outputfilename="None"):
             alt_loc_ats = mol.allAtoms.get(lambda x: "@" in x.name)
             len_alt_loc_ats = len(alt_loc_ats)
             if len_alt_loc_ats:
-                print("WARNING!", mol.name, "has",len_alt_loc_ats, ' alternate location atoms!\nUse prepare_pdb_split_alt_confs.py to create pdb files containing a single conformation.\n')
+                logger.warning(f"WARNING! {mol.name} has {len_alt_loc_ats} alternate location atoms!\nUse prepare_pdb_split_alt_confs.py to create pdb files containing a single conformation.\n")
 
             RPO = AD4ReceptorPreparation(mol, mode, repairs, charges_to_add, 
                                 cleanup, outputfilename=outputfilename,
@@ -335,4 +344,4 @@ def dock_vina(receptor, ligand, output, log_file, config=None, autosite=None, ce
     return (True, "")
 
 if __name__ == "__main__":
-    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
+    logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")

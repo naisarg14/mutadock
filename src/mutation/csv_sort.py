@@ -21,6 +21,14 @@
 from mutation.helpers import backup
 import sys, os
 import argparse
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 try:
     import pandas as pd
@@ -30,7 +38,7 @@ except ImportError:
     msg += "python -m pip install pandas\n"
     msg += "If you already have pandas installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 
@@ -56,7 +64,7 @@ def main():
 
 
     if not os.path.isabs(in_file):
-        print("Assuming current directory as root since path not specified.")
+        logger.info("Assuming current directory as root since path not specified.")
         dir = os.getcwd()
         file = in_file
     else:
@@ -81,7 +89,7 @@ def sort_csv(in_file, out_file=None, col_num=None, col_name=None, order=True):
     try:
         df = pd.read_csv(f"{in_file}.csv")
     except FileNotFoundError:
-        print("No such file found in current directory, enter full path for other directories.")
+        logger.error("No such file found in current directory, enter full path for other directories.")
         return 420
 
     if col_name:
@@ -94,7 +102,7 @@ def sort_csv(in_file, out_file=None, col_num=None, col_name=None, order=True):
     if not col_num:
         count = 0
         for i in (df.columns.values):
-            print(f"{count}: {i}")
+            logger.info(f"{count}: {i}")
             count += 1
         col_num = int(input("Enter the column number to sort by: "))
     df = df.sort_values(by=df.columns[col_num], ascending=True)

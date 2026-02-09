@@ -20,9 +20,17 @@
 
 import mutation.predict_ddG as predict_ddG
 import csv
+import logging
 from itertools import combinations
 from mutation.helpers import backup, Mutation
 import os, sys, argparse
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 try:
     from pyrosetta import *
@@ -33,7 +41,7 @@ except ImportError:
     msg += "Alternative is to install from PyRosetta's official website.\n"
     msg += "If you already have pyrosetta installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 try:
@@ -44,7 +52,7 @@ except ImportError:
     msg += "python -m pip install tqdm\n"
     msg += "If you already have tqdm installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 
@@ -139,7 +147,7 @@ def get_inputs():
 
 
     if not os.path.isabs(pdb_file):
-        print(f"Assuming current directory for {pdb_file} as root since path not specified.")
+        logger.info(f"Assuming current directory for {pdb_file} as root since path not specified.")
         dir = os.getcwd()
         file = pdb_file
     else:
@@ -155,7 +163,7 @@ def get_inputs():
 
     
     if not os.path.isabs(single_csv):
-        print(f"Assuming current directory for {single_csv} as root since path not specified.")
+        logger.info(f"Assuming current directory for {single_csv} as root since path not specified.")
         dir = os.getcwd()
         file = single_csv
     else:

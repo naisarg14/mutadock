@@ -19,6 +19,14 @@
 
 
 import sys, argparse
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 def vina_dock(receptor, ligand, output, center=[0, 0, 0], box_size=[30, 30, 30], exhaustiveness=32, n_poses=20, n_poses_write=5, overwrite=True):
     try:
@@ -30,15 +38,15 @@ def vina_dock(receptor, ligand, output, center=[0, 0, 0], box_size=[30, 30, 30],
         msg += "But this leads to errors from vina's side, please check \'https://autodock-vina.readthedocs.io/en/latest/installation.html\' for steps to install vina.\n"
         msg += "If you already have vina installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-        print(msg)
+        logger.error(msg)
         sys.exit(2)
     try:
-        print("Docking done using mutadock library developed by Naisarg Patel (Github:@naisarg14)")
+        logger.info("Docking done using mutadock library developed by Naisarg Patel (Github:@naisarg14)")
         v = Vina(sf_name='vina')
 
         v.set_receptor(receptor)
         v.set_ligand_from_file(ligand)
-        print(v)
+        logger.info(str(v))
         v.compute_vina_maps(center=center, box_size=box_size)
 
         v.dock(exhaustiveness=exhaustiveness, n_poses=n_poses)

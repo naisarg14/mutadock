@@ -20,9 +20,17 @@
 from itertools import product
 import os, time, sys
 import argparse
+import logging
 from contextlib import contextmanager
 from tqdm import tqdm
 from docking.vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 @contextmanager
@@ -41,7 +49,7 @@ def naisarg():
     receptors, ligands, config, autosite, quiet, completed_name, ignore_existing = prepare_inputs()
 
     if config is None and autosite is None:
-        print("Both config and autosite not provided. Assuming center as [0,0,0] and box_size as [30,30,30].")
+        logger.warning("Both config and autosite not provided. Assuming center as [0,0,0] and box_size as [30,30,30].")
 
     if config is not None:
         values = read_config
@@ -71,7 +79,7 @@ def naisarg():
 
     combinations = [x for x in combinations if str(x) not in completed]
 
-    if not quiet and not ignore_existing: print(f"Found {len(completed)} completed receptor-ligand combinations. {len(combinations)} combinations to be docked.")
+    if not quiet and not ignore_existing: logger.info(f"Found {len(completed)} completed receptor-ligand combinations. {len(combinations)} combinations to be docked.")
 
     for combination in tqdm(combinations):
         receptor = combination[0]
@@ -83,7 +91,7 @@ def naisarg():
         elif ligand.endswith(".mol2"):
             prepared_ligand = f"{ligand.removesuffix('.mol2')}.pdbqt"
 
-        if not quiet: print(f"Docking the receptor {receptor} to the ligand {ligand}")
+        if not quiet: logger.info(f"Docking the receptor {receptor} to the ligand {ligand}")
         master_folder_receptor, receptor_file = os.path.split(os.path.abspath(receptor))
         master_folder_ligand, ligand_file = os.path.split(os.path.abspath(ligand))
         
@@ -99,40 +107,40 @@ def naisarg():
         backup(log_file)
 
         try:
-            if not quiet: print(f"Docking for {ligand} with {receptor}")
-            if not quiet: print("Press Ctrl+D (EOFE Error) to skip this receptor-ligand combination.")
+            if not quiet: logger.info(f"Docking for {ligand} with {receptor}")
+            if not quiet: logger.info("Press Ctrl+D (EOFE Error) to skip this receptor-ligand combination.")
             if not os.path.exists(prepared_receptor) or ignore_existing:
-                if not quiet: print(f"Preparing receptor {receptor}")
+                if not quiet: logger.info(f"Preparing receptor {receptor}")
                 with suppress_stdout(): rec_out = prepare_receptor(receptor_filename=receptor, outputfilename=prepared_receptor)
                 if not rec_out[0]:
-                    print(f"Error while preparing receptor {receptor} \nError: {rec_out[1]} \nSkipping this receptor-ligand combination.")
+                    logger.error(f"Error while preparing receptor {receptor} \nError: {rec_out[1]} \nSkipping this receptor-ligand combination.")
                     continue
 
             if not os.path.exists(prepared_ligand) or ignore_existing:
-                if not quiet: print(f"Preparing ligand {ligand}")
+                if not quiet: logger.info(f"Preparing ligand {ligand}")
                 with suppress_stdout(): lig_out = prepare_ligand(in_file=ligand, out_file=prepared_ligand)
                 if not lig_out[0]:
-                    print(f"Error while preparing ligand {ligand} \nError: {lig_out[1]} \nSkipping this receptor-ligand combination.")
+                    logger.error(f"Error while preparing ligand {ligand} \nError: {lig_out[1]} \nSkipping this receptor-ligand combination.")
                     continue
 
-            if not quiet: print(f"Starting docking")
+            if not quiet: logger.info(f"Starting docking")
             with suppress_stdout(): vina_out = dock_vina(prepared_receptor, prepared_ligand, out_pdb, log_file, center=center, box_size=box_size, exhaustiveness=exhaustiveness, n_poses=n_poses, n_poses_write=n_poses_write, overwrite=overwrite)
             if not vina_out[0]:
-                print(f"Error while docking {ligand} to {receptor} \nError: {vina_out[1]} \nSkipping this receptor-ligand combination.")
+                logger.error(f"Error while docking {ligand} to {receptor} \nError: {vina_out[1]} \nSkipping this receptor-ligand combination.")
                 continue
-            if not quiet: print("Docking Completed, writing log file")
+            if not quiet: logger.info("Docking Completed, writing log file")
 
-            if not quiet: print("Getting the ligand 1 after docking")
+            if not quiet: logger.info("Getting the ligand 1 after docking")
             ligand_1 = out_pdb.replace('.pdbqt', '_ligand_1.sdf')
             with suppress_stdout(): score, _ = vina_split(input_file=out_pdb, output_file=out_pdb)
-            if not quiet: print("Adding affinity to CSV")
+            if not quiet: logger.info("Adding affinity to CSV")
             csv_add = add_score_to_csv(out_pdb, csv_file, score)
             if not csv_add[0]:
-                print(f"Error while adding affinity to CSV file {csv_file} \nError: {csv_add[1]}")
+                logger.error(f"Error while adding affinity to CSV file {csv_file} \nError: {csv_add[1]}")
             
             with open(completed_name, "a+") as file: file.write(f"{combination}\n")
 
-            if not quiet: print(f"Docking completed, log file is {log_file}, ligand_1 is {ligand_1.replace('.pdbqt', '.sdf')}, docking affinity is {score}. \n")
+            if not quiet: logger.info(f"Docking completed, log file is {log_file}, ligand_1 is {ligand_1.replace('.pdbqt', '.sdf')}, docking affinity is {score}. \n")
 
         except EOFError:
             continue
@@ -141,9 +149,9 @@ def naisarg():
     end_time = time.time()
     elapsed_time = (end_time - start_time)/60
     
-    print(f"All Outputs are saved in the folder: {output_dir}")
+    logger.info(f"All Outputs are saved in the folder: {output_dir}")
 
-    print(f"Completed in {elapsed_time:.2f} minutes!")
+    logger.info(f"Completed in {elapsed_time:.2f} minutes!")
 
 
 def prepare_inputs():
@@ -161,14 +169,14 @@ def prepare_inputs():
     ligand_txt = args.ligand_txt
     config = args.config
 
-    print("Receptor file:", receptor_txt)
-    print("Ligands file:", ligand_txt)
-    print("Config file:", config)
+    logger.info(f"Receptor file: {receptor_txt}")
+    logger.info(f"Ligands file: {ligand_txt}")
+    logger.info(f"Config file: {config}")
     for f in [receptor_txt, ligand_txt]:
         if f is None:
             sys.exit(f"Error: Required Input Files not provided.")
         if not os.path.exists(f):
-            print(f"{f} not found or cannot be opened.")
+            logger.error(f"{f} not found or cannot be opened.")
     try:
         with open(receptor_txt, "r") as rec:
             receptors = rec.readlines()

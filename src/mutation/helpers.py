@@ -19,9 +19,17 @@
 
 
 import os
+import logging
 from datetime import datetime
 import shutil
 from mutation.Amino import check_3, get_1
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class Mutation():
     def __init__(self, chain, position, aa_old, aa_new):
@@ -111,7 +119,21 @@ def clean_pdb(pdb_file, pdb_clean=None):
         return (True, pdb_clean)
     except Exception as e:
         return (False, e)
+    
+def convert_cif_pdb(cif_file, pdb_file=None):
+    from Bio.PDB import MMCIFParser, PDBIO
+    if not pdb_file:
+        pdb_file = cif_file.replace(".cif", ".pdb")
+    parser = MMCIFParser()
+    try:
+        structure = parser.get_structure('structure', cif_file)
+        io = PDBIO()
+        io.set_structure(structure)
+        io.save(pdb_file)
+        return (True, pdb_file)
+    except Exception as e:
+        return (False, e)
 
 
 if __name__ == "__main__":
-    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's mutation module.")
+    logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's mutation module.")

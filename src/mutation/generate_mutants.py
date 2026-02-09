@@ -19,8 +19,16 @@
 
 
 import csv, os, sys
+import logging
 import mutation.helpers
 from mutation.Amino import get_1
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 try:
     from pyrosetta import *
@@ -32,7 +40,7 @@ except ImportError:
     msg += "Alternative is to install from PyRosetta's official website.\n"
     msg += "If you already have pyrosetta installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 try:
@@ -43,12 +51,12 @@ except ImportError:
     msg += "python -m pip install tqdm\n"
     msg += "If you already have tqdm installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 
 def main():
-    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
+    logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
 
 def generate_single_mutation(pdb_file, csv_file, total=0, folder=None, text_file=None):
     if int(total) == 0:

@@ -43,7 +43,7 @@ aa_dict = {
 
 
 def main():
-    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's mutation module.")
+    logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's mutation module.")
 
 def check_3(aa):
     aa = str(aa).strip().upper()

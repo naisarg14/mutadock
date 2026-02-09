@@ -1,3 +1,12 @@
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 def main():
     packages = [
         "git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3.git",
@@ -21,7 +30,7 @@ def main():
         msg += "python -m pip install pyrosetta-installer\n"
         msg += "If you already have pyrosetta-installer installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-        print(msg)
+        logger.error(msg)
         import sys; sys.exit(2)
 
 

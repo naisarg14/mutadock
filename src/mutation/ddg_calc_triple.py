@@ -20,9 +20,17 @@
 
 import mutation.predict_ddG as predict_ddG
 from itertools import combinations
+import logging
 from mutation.Amino import get_1
 from mutation.helpers import backup
 import os, sys, argparse, csv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 try:
     from pyrosetta import *
@@ -33,7 +41,7 @@ except ImportError:
     msg += "Alternative is to install from PyRosetta's official website.\n"
     msg += "If you already have pyrosetta installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 try:
@@ -44,7 +52,7 @@ except ImportError:
     msg += "python -m pip install tqdm\n"
     msg += "If you already have tqdm installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 
@@ -165,7 +173,7 @@ def get_inputs():
     total = args.num
 
     if not os.path.isabs(pdb_file):
-        print(f"Assuming current directory for {pdb_file} as root since path not specified.")
+        logger.info(f"Assuming current directory for {pdb_file} as root since path not specified.")
         dir = os.getcwd()
         file = pdb_file
     else:
@@ -180,7 +188,7 @@ def get_inputs():
         sys.exit("Given file is not a PDB file, input should be a PDB file.")
 
     if not os.path.isabs(double_csv):
-        print(f"Assuming current directory for {double_csv} as root since path not specified.")
+        logger.info(f"Assuming current directory for {double_csv} as root since path not specified.")
         dir = os.getcwd()
         file = double_csv
     else:
@@ -192,7 +200,7 @@ def get_inputs():
         sys.exit("No such file found in current directory, enter full path for other directories.")
 
     if not full_csv_path.endswith(".csv"):
-        print("Given file is not a CSV file, input should be a CSV file.")
+        logger.error("Given file is not a CSV file, input should be a CSV file.")
 
     if out_csv and not out_csv.endswith(".csv"):
         out_csv += ".csv"

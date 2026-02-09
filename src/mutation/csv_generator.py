@@ -19,9 +19,17 @@
 
 
 import csv, os, sys
+import logging
 from mutation.Amino import get_dict, get_scfn_250
-from mutation.helpers import backup
+from mutation.helpers import backup, convert_cif_pdb
 import argparse
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 try:
     from Bio.PDB import PDBParser
@@ -31,7 +39,7 @@ except ImportError:
     msg += "python -m pip install biopython\n"
     msg += "If you already have biopython installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 
@@ -50,7 +58,7 @@ def generate_csv(pdb_file, out_all=None, out_op=None):
         out_all = out_all.removesuffix(".csv") + "_all.csv"
     residues = get_residues(pdb_file)
     if not residues:
-        print("Check File Name")
+        logger.error("Check File Name")
         return None
 
     backup(out_op)
@@ -135,13 +143,22 @@ def get_inputs():
     pdb_file = args.input
 
     if not os.path.isabs(pdb_file):
-        print("Assuming current directory as root since path not specified.")
+        logger.info("Assuming current directory as root since path not specified.")
         dir = os.getcwd()
         file = pdb_file
     else:
         dir, file = os.path.split(os.path.abspath(pdb_file))
 
     full_pdb_path = os.path.join(dir, file)
+
+    if full_pdb_path.endswith(".cif"):
+        result = convert_cif_pdb(full_pdb_path)
+        if result[0]:
+            full_pdb_path = result[1]
+        else:
+            logger.error("Error converting CIF to PDB: %s", result[1])
+            sys.exit(2)
+
 
     if not os.path.isfile(full_pdb_path):
         sys.exit("No such file found in current directory, enter full path for other directories.")

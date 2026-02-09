@@ -17,6 +17,15 @@
 #  for more details.                                                           #
 ################################################################################
 
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 try:
     from pyrosetta import *
     from pyrosetta.teaching import *
@@ -32,7 +41,7 @@ except ImportError:
     msg += "Alternative is to install from PyRosetta's official website.\n"
     msg += "If you already have pyrosetta installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-    print(msg)
+    logger.error(msg)
     sys.exit(2)
 
 def mutate_residue(pose, mutant_position, mutant_aa, pack_radius, pack_scorefxn):
@@ -68,4 +77,4 @@ def mutate_residue(pose, mutant_position, mutant_aa, pack_radius, pack_scorefxn)
 
 
 if __name__ == "__main__":
-    print("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
+    logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
