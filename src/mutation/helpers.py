@@ -22,6 +22,7 @@ import os
 import logging
 from datetime import datetime
 import shutil
+from typing import Tuple, Optional
 from mutation.Amino import check_3, get_1
 
 # Configure logging
@@ -32,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class Mutation():
-    def __init__(self, chain, position, aa_old, aa_new):
+    def __init__(self, chain: str, position: int, aa_old: str, aa_new: str) -> None:
         self.chain = chain
         self.position = int(position)
         if check_3(aa_old):
@@ -45,11 +46,11 @@ class Mutation():
             self.new = aa_new
 
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"The aa at {self.chain}{self.position} is mutated from {self.aa_old} to {self.aa_new}."
 
 
-def backup(file_path):
+def backup(file_path: str) -> bool:
     if not os.path.exists(file_path):
         return False
     master_folder, file = os.path.split(os.path.abspath(file_path))
@@ -64,7 +65,7 @@ def backup(file_path):
     return True
 
 
-def move_file(file_path, folder):
+def move_file(file_path: str, folder: str) -> Tuple[str, str]:
     master_folder, file = os.path.split(os.path.abspath(file_path))
     folder_path = os.path.join(master_folder, folder)
     if not os.path.exists(folder_path):
@@ -73,7 +74,7 @@ def move_file(file_path, folder):
     return (folder_path, (os.path.join(folder_path, file)))
 
 
-def process_vina(file):
+def process_vina(file: str) -> str:
     master_folder, out_file = os.path.split(os.path.abspath(file))
     ligand1 = os.path.join(master_folder, f"{out_file}_ligand_1.pdbqt")
     for i in range(2, 10):
@@ -84,7 +85,7 @@ def process_vina(file):
             pass
     return ligand1
 
-def file_info(file_path):
+def file_info(file_path: str) -> Tuple[bool, int]:
     if os.path.isfile(file_path):
         with open(file_path, 'r') as file:
             row_count = sum(1 for _ in file)
@@ -92,7 +93,7 @@ def file_info(file_path):
     else:
         return (False, 0)
 
-def permutations(n, r):
+def permutations(n: int, r: int) -> int:
     from math import factorial
     if n < r:
         return 0
@@ -100,7 +101,7 @@ def permutations(n, r):
         return int(factorial(n) / factorial(n - r))
     
 
-def clean_pdb(pdb_file, pdb_clean=None):
+def clean_pdb(pdb_file: str, pdb_clean: Optional[str] = None) -> Tuple[bool, str]:
     from datetime import datetime
     if not pdb_clean:
         pdb_clean = pdb_file.replace(".pdb", "_clean.pdb")
@@ -120,7 +121,7 @@ def clean_pdb(pdb_file, pdb_clean=None):
     except Exception as e:
         return (False, e)
     
-def convert_cif_pdb(cif_file, pdb_file=None):
+def convert_cif_pdb(cif_file: str, pdb_file: Optional[str] = None) -> Tuple[bool, str]:
     from Bio.PDB import MMCIFParser, PDBIO
     if not pdb_file:
         pdb_file = cif_file.replace(".cif", ".pdb")

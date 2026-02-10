@@ -21,6 +21,7 @@
 import mutation.predict_ddG as predict_ddG
 import csv
 import logging
+from typing import Tuple, Optional, List, Dict
 from itertools import combinations
 from mutation.helpers import backup, Mutation
 import os, sys, argparse
@@ -56,12 +57,12 @@ except ImportError:
     sys.exit(2)
 
 
-def main():
+def main() -> None:
     full_pdb_path, full_csv_path, total, out_csv = get_inputs()
     calc_double_ddg(pdb_file=full_pdb_path, single_csv=full_csv_path, total=total, out_csv=out_csv)
 
 
-def calc_double_ddg(pdb_file, single_csv=None, out_csv=None, total=0):
+def calc_double_ddg(pdb_file: str, single_csv: Optional[str] = None, out_csv: Optional[str] = None, total: int = 0) -> str:
     if not out_csv:
         out_csv = f"{pdb_file.removesuffix('.pdb')}_double_ddg.csv"
     backup(out_csv)
@@ -115,7 +116,7 @@ def calc_double_ddg(pdb_file, single_csv=None, out_csv=None, total=0):
         return out_csv
 
 
-def get_mut_csv(file, total=0):
+def get_mut_csv(file: str, total: int = 0) -> List[Dict[str, str]]:
     with open(file) as f:
         reader = csv.DictReader(f)
         result = []
@@ -130,7 +131,7 @@ def get_mut_csv(file, total=0):
     return result
 
 
-def get_inputs():
+def get_inputs() -> Tuple[str, str, int, Optional[str]]:
     parser = argparse.ArgumentParser(
         description="Takes input a PDB file and CSV of mutations and then calculated the Double ddG values for all the mutations.", epilog="Written by Naisarg Patel (https://github.com/naisarg14)"
     )

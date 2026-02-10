@@ -19,6 +19,7 @@
 
 
 import logging
+from typing import Dict, List, Tuple, Any, Optional
 
 # Configure logging
 logging.basicConfig(
@@ -27,7 +28,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def backup(file_path):
+def backup(file_path: str) -> bool:
     import os
     from datetime import datetime
 
@@ -44,7 +45,7 @@ def backup(file_path):
     os.rename(file_path, target_file)
     return True
 
-def read_pdb_file(file_path):
+def read_pdb_file(file_path: str) -> List[Dict[str, Any]]:
     import re
     try:
         atoms = []
@@ -72,7 +73,7 @@ def read_pdb_file(file_path):
     except Exception as e:
         return (False, e)
 
-def calculate_geometric_center(pdb_file):
+def calculate_geometric_center(pdb_file: str) -> Tuple[float, float, float]:
     atoms = read_pdb_file(pdb_file)
     num_atoms = len(atoms)
     x_sum = sum(atom['x'] for atom in atoms)
@@ -81,7 +82,7 @@ def calculate_geometric_center(pdb_file):
     
     return (x_sum / num_atoms, y_sum / num_atoms, z_sum / num_atoms)
 
-def calculate_radius(pdb_file):
+def calculate_radius(pdb_file: str) -> float:
     import math
     atoms = read_pdb_file(pdb_file)
     if isinstance(atoms, tuple):
@@ -101,7 +102,7 @@ def calculate_radius(pdb_file):
 
     return max_distance
 
-def vina_split(input_file, output_file=None):
+def vina_split(input_file: str, output_file: Optional[str] = None) -> Tuple[float, str]:
     try:
         import sys
         from meeko import PDBQTMolecule, RDKitMolCreate
@@ -141,7 +142,7 @@ def vina_split(input_file, output_file=None):
     
     return (score, output_file)
 
-def prepare_ligand(in_file, out_file=None):
+def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> Tuple[bool, str]:
     try:
         import sys
         from meeko import MoleculePreparation, PDBQTWriterLegacy
@@ -184,7 +185,7 @@ def prepare_ligand(in_file, out_file=None):
 
     return (True, pdbqt_string)
 
-def prepare_receptor(receptor_filename, outputfilename="None"):
+def prepare_receptor(receptor_filename: str, outputfilename: str = "None") -> Tuple[bool, str]:
     try:
         import sys, os
         from MolKit import Read
@@ -255,7 +256,7 @@ def prepare_receptor(receptor_filename, outputfilename="None"):
      
     return (True, "")
 
-def add_score_to_csv(out_pdb, csv_file, score):
+def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> Tuple[bool, str]:
     import csv, os
     try:
         with open(csv_file, "r") as lc:
@@ -279,7 +280,7 @@ def add_score_to_csv(out_pdb, csv_file, score):
         
     return (True, name)
     
-def read_config(config_file):
+def read_config(config_file: str) -> Tuple:
     try:
         config = {}
         with open(config_file, 'r') as file:
@@ -308,7 +309,7 @@ def read_config(config_file):
     except Exception as e:
         return (False, e)
 
-def dock_vina(receptor, ligand, output, log_file, config=None, autosite=None, center=[0, 0, 0], box_size=[30, 30, 30], exhaustiveness=32, n_poses=20, n_poses_write=5, overwrite=True):
+def dock_vina(receptor: str, ligand: str, output: str, log_file: str, config: Optional[str] = None, autosite: Optional[str] = None, center: List[float] = [0, 0, 0], box_size: List[int] = [30, 30, 30], exhaustiveness: int = 32, n_poses: int = 20, n_poses_write: int = 5, overwrite: bool = True) -> Tuple[bool, str]:
     if config is not None:
         values = read_config(config)
         if values[0] is False:

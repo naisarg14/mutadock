@@ -18,6 +18,7 @@
 ################################################################################
 
 import logging
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
@@ -44,7 +45,7 @@ except ImportError:
     logger.error(msg)
     sys.exit(2)
 
-def mutate_residue(pose, mutant_position, mutant_aa, pack_radius, pack_scorefxn):
+def mutate_residue(pose: Any, mutant_position: int, mutant_aa: str, pack_radius: float, pack_scorefxn: Any) -> Any:
     if pose.is_fullatom() == False:
         IOError("mutate_residue only works with fullatom poses")
 

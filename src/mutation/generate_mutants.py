@@ -20,6 +20,7 @@
 
 import csv, os, sys
 import logging
+from typing import Optional
 import mutation.helpers
 from mutation.Amino import get_1
 
@@ -55,10 +56,10 @@ except ImportError:
     sys.exit(2)
 
 
-def main():
+def main() -> None:
     logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
 
-def generate_single_mutation(pdb_file, csv_file, total=0, folder=None, text_file=None):
+def generate_single_mutation(pdb_file: str, csv_file: str, total: int = 0, folder: Optional[str] = None, text_file: Optional[str] = None) -> str:
     if int(total) == 0:
         idk = 0
     else:
@@ -94,7 +95,7 @@ def generate_single_mutation(pdb_file, csv_file, total=0, folder=None, text_file
     return out_folder
 
 
-def generate_double_mutation(pdb_file, csv_file, total=10, folder=None, text_file=None):
+def generate_double_mutation(pdb_file: str, csv_file: str, total: int = 10, folder: Optional[str] = None, text_file: Optional[str] = None) -> str:
     if int(total) == 0:
         idk = 0
     else:
@@ -137,7 +138,7 @@ def generate_double_mutation(pdb_file, csv_file, total=10, folder=None, text_fil
     return out_folder
 
 
-def generate_triple_mutation(pdb_file, csv_file, total=-1, folder=None, text_file=None):
+def generate_triple_mutation(pdb_file: str, csv_file: str, total: int = -1, folder: Optional[str] = None, text_file: Optional[str] = None) -> str:
     if int(total) == -1:
         idk = 0
     else:

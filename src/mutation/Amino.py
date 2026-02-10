@@ -17,6 +17,16 @@
 #  for more details.                                                           #
 ################################################################################
 
+from typing import Dict, Optional
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 
 aa_dict = {
     "ALA": "A",
@@ -42,16 +52,16 @@ aa_dict = {
 }
 
 
-def main():
+def main() -> None:
     logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's mutation module.")
 
-def check_3(aa):
+def check_3(aa: str) -> bool:
     aa = str(aa).strip().upper()
     if aa in aa_dict:
         return True
     return False
 
-def check_1(aa):
+def check_1(aa: str) -> bool:
     aa = str(aa).strip().upper()
     for a in aa_dict:
         if aa_dict[a] == aa:
@@ -59,7 +69,7 @@ def check_1(aa):
     return False
 
 
-def get_1(three):
+def get_1(three: str) -> Optional[str]:
     three = str(three).strip().upper()
     if check_1(three):
         return three
@@ -69,7 +79,7 @@ def get_1(three):
         return None
 
 
-def get_3(one):
+def get_3(one: str) -> Optional[str]:
     one = str(one).strip().upper()
     if check_3(one):
         return one
@@ -79,11 +89,11 @@ def get_3(one):
     return None
 
 
-def get_dict():
+def get_dict() -> Dict[str, str]:
     return aa_dict
 
 
-def get_scfn_250():
+def get_scfn_250() -> Dict[str, Dict[str, int]]:
     score_dict = {
         "ALA": {"ALA": 2, "ARG": -2, "ASN": 0, "ASP": 0, "CYS": -2, "GLN": 0, "GLU": 0, "GLY": 1, "HIS": -1, "ILE": -1, "LEU": -2, "LYS": -1, "MET": -1, "PHE": -3, "PRO": 1, "SER": 1, "THR": 1, "TRP": -6, "TYR": -3, "VAL": 0},
         "ARG": {"ALA": -2, "ARG": 6, "ASN": 0, "ASP": -1, "CYS": -4, "GLN": 1, "GLU": -1, "GLY": -3, "HIS": 2, "ILE": -2, "LEU": -3, "LYS": 3, "MET": 0, "PHE": -4, "PRO": 0, "SER": 0, "THR": -1, "TRP": 2, "TYR": -4, "VAL": -2},
@@ -109,7 +119,7 @@ def get_scfn_250():
     return score_dict
 
 
-def get_scfn_1():
+def get_scfn_1() -> Dict[str, Dict[str, int]]:
     score_dict = {
         "ALA": {
             "ALA": 9867,

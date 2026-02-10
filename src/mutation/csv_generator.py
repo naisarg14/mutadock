@@ -20,6 +20,7 @@
 
 import csv, os, sys
 import logging
+from typing import Optional, Dict, Tuple
 from mutation.Amino import get_dict, get_scfn_250
 from mutation.helpers import backup, convert_cif_pdb
 import argparse
@@ -43,12 +44,12 @@ except ImportError:
     sys.exit(2)
 
 
-def main():
+def main() -> None:
     pdb_file, out_op, out_all = get_inputs()
     generate_csv(pdb_file, out_all, out_op)
 
 
-def generate_csv(pdb_file, out_all=None, out_op=None):
+def generate_csv(pdb_file: str, out_all: Optional[str] = None, out_op: Optional[str] = None) -> Optional[Tuple[str, str]]:
     if not out_all:
         out_all = f"{pdb_file.removesuffix('.pdb')}_mutations_all.csv"
     if not out_op:
@@ -110,8 +111,8 @@ def generate_csv(pdb_file, out_all=None, out_op=None):
     return out_op, out_all
 
 
-def get_residues(file):
-    residues = {}
+def get_residues(file: str) -> Optional[Dict[int, Tuple[str, int, str]]]:
+    residues: Dict[int, Tuple[str, int, str]] = {}
     count = 0
     parser = PDBParser(PERMISSIVE=1)
     try:
@@ -132,7 +133,7 @@ def get_residues(file):
                 count += 1
     return residues
 
-def get_inputs():
+def get_inputs() -> Tuple[str, Optional[str], Optional[str]]:
     parser = argparse.ArgumentParser(description="This program takes as input a PDB file and generates all possible mutations and also gives the PAM250 score.", epilog="Written by Naisarg Patel (https://github.com/naisarg14)")
     parser.add_argument("-i",'--input', help="PDB File for predicting mutations", metavar="PDB", required=True)
     parser.add_argument("-o", "--positive", help="Output CSV for only non-zero values", metavar="FILE")

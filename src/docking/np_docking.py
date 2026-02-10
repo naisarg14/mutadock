@@ -22,6 +22,7 @@ import os, time, sys
 import argparse
 import logging
 from contextlib import contextmanager
+from typing import Tuple, List, Optional, Any
 from tqdm import tqdm
 from docking.vina_helper import prepare_receptor, prepare_ligand, vina_split, add_score_to_csv, dock_vina, read_config, calculate_geometric_center, backup
 
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def suppress_stdout():
+def suppress_stdout() -> Any:
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         sys.stdout = devnull
@@ -44,7 +45,7 @@ def suppress_stdout():
             sys.stdout = old_stdout
 
 
-def naisarg():
+def naisarg() -> None:
     start_time = time.time()
     receptors, ligands, config, autosite, quiet, completed_name, ignore_existing = prepare_inputs()
 
@@ -154,7 +155,7 @@ def naisarg():
     logger.info(f"Completed in {elapsed_time:.2f} minutes!")
 
 
-def prepare_inputs():
+def prepare_inputs() -> Tuple[List[str], List[str], Optional[str], Optional[str], bool, str, bool]:
     parser = argparse.ArgumentParser(prog="np_dock", description=None, epilog="Part of mutadock library. Written by Naisarg Patel (https://github.com/naisarg14)")
     parser.add_argument("-r", "--receptor_txt", help="Text File with all receptors", metavar="RECEPTOR")
     parser.add_argument("-l", "--ligand_txt", help="Text File with all ligands", metavar="LIGAND")

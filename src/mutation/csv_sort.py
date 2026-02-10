@@ -22,6 +22,7 @@ from mutation.helpers import backup
 import sys, os
 import argparse
 import logging
+from typing import Optional, Union
 
 # Configure logging
 logging.basicConfig(
@@ -42,7 +43,7 @@ except ImportError:
     sys.exit(2)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="This program takes as input a CSV file and sorts it according to the coloumn given.", epilog="Written by Naisarg Patel (https://github.com/naisarg14)")
     parser.add_argument("-i",'--input', help="CSV File to sort", metavar="CSV", required=True)
     parser.add_argument("-o", "--output", help="Sorted Output CSV", metavar="CSV")
@@ -81,7 +82,7 @@ def main():
     sort_csv(in_file=full_csv_path, out_file=args.output, col_num=args.num, col_name=args.name, order=order)
 
 
-def sort_csv(in_file, out_file=None, col_num=None, col_name=None, order=True):
+def sort_csv(in_file: str, out_file: Optional[str] = None, col_num: Optional[Union[str, int]] = None, col_name: Optional[str] = None, order: bool = True) -> Union[str, int]:
     in_file = in_file.removesuffix('.csv')
     if not out_file:
         out_file = f"{in_file.removesuffix('.csv')}_sorted.csv"

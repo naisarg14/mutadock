@@ -20,6 +20,7 @@
 
 import os, sys, time, argparse
 import logging
+from typing import Tuple, Any
 from mutation.csv_generator import generate_csv
 from mutation.ddg_calc import calc_ddg
 from mutation.csv_sort import sort_csv
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def suppress_stdout():
+def suppress_stdout() -> Any:
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         sys.stdout = devnull
@@ -48,7 +49,7 @@ def suppress_stdout():
             sys.stdout = old_stdout
 
 
-def naisarg():
+def naisarg() -> None:
     start_time = time.time()
     full_pdb_path, num_double_ddg, num_single_mut, num_double_mut, num_triple_ddg, num_triple_mut, append, quiet = get_inputs()
 
@@ -173,7 +174,7 @@ def naisarg():
 
 
 
-def get_inputs():
+def get_inputs() -> Tuple[str, int, int, int, int, int, bool, bool]:
     parser = argparse.ArgumentParser(prog="np_mutation", description=None, epilog="Part of mutadock library. Written by Naisarg Patel (https://github.com/naisarg14)")
     parser.add_argument("-i",'--input', help="PDB File for predicting and generating mutations", metavar="PDB", required=True)
     parser.add_argument("-s", "--double", help="Number of Compounds for Double ddG", metavar="D", type=int, default=100)
