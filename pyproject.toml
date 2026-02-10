@@ -13,13 +13,13 @@ readme = "README.md"
 license = {text = "GPL-3.0"}
 keywords = ["Biology", "Mutation", "Docking", "Bioinformatics"]
 dependencies = [
-  'biopython==1.84',
-  'meeko==0.5.0',
-  'numpy>=2.1.1',
-  'pyrosetta-installer==0.1.1',
-  'tqdm>=4.66.5',
-  'pyarrow==17.0.0',
-  'pandas==2.2.2',
+  'biopython',
+  'meeko',
+  'numpy',
+  'pyrosetta-installer',
+  'tqdm',
+  'pyarrow',
+  'pandas',
 ]
 
 
@@ -31,12 +31,7 @@ classifiers = [
 
   "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
 
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.6",
-  "Programming Language :: Python :: 3.7",
-  "Programming Language :: Python :: 3.8",
-  "Programming Language :: Python :: 3.9",
-  "Programming Language :: Python :: 3.10",
+
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12"
 ]
