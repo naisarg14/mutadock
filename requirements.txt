@@ -1,8 +1,0 @@
-#git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3.git
-biopython
-meeko
-numpy
-pyrosetta-installer
-tqdm
-pyarrow
-pandas

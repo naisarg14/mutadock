@@ -3,7 +3,7 @@ Tests for docking.np_docking
 ------------------------------
 All external docking helpers (prepare_receptor, prepare_ligand, dock_vina,
 vina_split, add_score_to_csv, backup, read_config) are patched in
-np_docking's own namespace so the real vina/meeko/AutoDockTools packages
+np_docking's own namespace so the real vina/meeko/pdbfixer packages
 need not be installed.
 
 Run from the project root:

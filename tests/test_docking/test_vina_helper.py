@@ -1,7 +1,7 @@
 """
 Tests for docking.vina_helper
 -------------------------------
-External deps (meeko, rdkit, MolKit, AutoDockTools) are injected into
+External deps (meeko, rdkit, pdbfixer, openmm) are injected into
 sys.modules per-test using patch.dict so the real packages need not be installed.
 
 Run from the project root:
@@ -343,47 +343,117 @@ class TestPrepareReceptor(unittest.TestCase):
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _molkit_stubs(self):
-        mock_mol = MagicMock()
-        mock_mol.allAtoms.get.return_value = []
-        mock_mol.name = "rec"
-        mock_read = MagicMock(return_value=[mock_mol])
+    def _stubs(self):
+        """Return (pdbfixer_stub, openmm_stub, openmm_app_stub)."""
+        pdbfixer_stub = types.ModuleType("pdbfixer")
+        pdbfixer_stub.PDBFixer = MagicMock(return_value=MagicMock())
 
-        molkit_stub = types.ModuleType("MolKit")
-        molkit_stub.Read = mock_read
+        openmm_app_stub = types.ModuleType("openmm.app")
+        openmm_app_stub.PDBFile = MagicMock()
+        openmm_stub = types.ModuleType("openmm")
 
-        adt_mol_prep = types.ModuleType("AutoDockTools.MoleculePreparation")
-        adt_mol_prep.AD4ReceptorPreparation = MagicMock()
-        adt_stub = types.ModuleType("AutoDockTools")
-        adt_stub.MoleculePreparation = adt_mol_prep
+        return pdbfixer_stub, openmm_stub, openmm_app_stub
 
-        return molkit_stub, adt_stub, adt_mol_prep
-
-    def _modules(self, molkit_stub, adt_stub, adt_mol_prep):
+    def _modules(self, pdbfixer_stub, openmm_stub, openmm_app_stub):
         return {
-            "MolKit": molkit_stub,
-            "AutoDockTools": adt_stub,
-            "AutoDockTools.MoleculePreparation": adt_mol_prep,
+            "pdbfixer": pdbfixer_stub,
+            "openmm": openmm_stub,
+            "openmm.app": openmm_app_stub,
         }
 
-    def test_success_returns_true_empty_string(self):
-        molkit_stub, adt_stub, adt_mol_prep = self._molkit_stubs()
-        with patch.dict(
-            sys.modules, self._modules(molkit_stub, adt_stub, adt_mol_prep)
-        ):
-            result = vina_helper.prepare_receptor(self.pdb, self.out)
-        self.assertTrue(result[0])
-        self.assertEqual(result[1], "")
+    def _ok_result(self):
+        r = MagicMock()
+        r.returncode = 0
+        r.stderr = ""
+        return r
 
-    def test_exception_in_read_returns_false(self):
-        molkit_stub, adt_stub, adt_mol_prep = self._molkit_stubs()
-        molkit_stub.Read.side_effect = RuntimeError("cannot read")
+    def test_success_does_not_raise(self):
+        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
         with patch.dict(
-            sys.modules, self._modules(molkit_stub, adt_stub, adt_mol_prep)
+            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
         ):
-            result = vina_helper.prepare_receptor(self.pdb, self.out)
-        self.assertIs(result[0], False)
-        self.assertIsInstance(result[1], RuntimeError)
+            with patch("subprocess.run", return_value=self._ok_result()):
+                vina_helper.prepare_receptor(self.pdb, self.out)
+
+    def test_mk_receptor_failure_raises(self):
+        from docking.exceptions import ReceptorPreparationError
+
+        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
+        bad = MagicMock()
+        bad.returncode = 1
+        bad.stderr = "conversion error"
+        with patch.dict(
+            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
+        ):
+            with patch("subprocess.run", return_value=bad):
+                with self.assertRaises(ReceptorPreparationError):
+                    vina_helper.prepare_receptor(self.pdb, self.out)
+
+    def test_pdbfixer_failure_raises(self):
+        from docking.exceptions import ReceptorPreparationError
+
+        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
+        pdbfixer_stub.PDBFixer.side_effect = RuntimeError("bad pdb")
+        with patch.dict(
+            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
+        ):
+            with patch("subprocess.run", return_value=self._ok_result()):
+                with self.assertRaises(ReceptorPreparationError):
+                    vina_helper.prepare_receptor(self.pdb, self.out)
+
+    def test_default_output_uses_pdbqt_extension(self):
+        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
+        captured = []
+
+        def capture(cmd, **kw):
+            captured.extend(cmd)
+            return self._ok_result()
+
+        with patch.dict(
+            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
+        ):
+            with patch("subprocess.run", side_effect=capture):
+                vina_helper.prepare_receptor(self.pdb)
+        out_path = captured[captured.index("-o") + 1]
+        self.assertTrue(out_path.endswith(".pdbqt"))
+
+    def test_tmp_file_cleaned_up_after_success(self):
+        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
+        captured = []
+
+        def capture(cmd, **kw):
+            captured.extend(cmd)
+            return self._ok_result()
+
+        with patch.dict(
+            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
+        ):
+            with patch("subprocess.run", side_effect=capture):
+                vina_helper.prepare_receptor(self.pdb, self.out)
+        tmp_path = captured[captured.index("-i") + 1]
+        self.assertFalse(Path(tmp_path).exists())
+
+    def test_tmp_file_cleaned_up_after_failure(self):
+        from docking.exceptions import ReceptorPreparationError
+
+        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
+        bad = MagicMock()
+        bad.returncode = 1
+        bad.stderr = "error"
+        captured = []
+
+        def capture(cmd, **kw):
+            captured.extend(cmd)
+            return bad
+
+        with patch.dict(
+            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
+        ):
+            with patch("subprocess.run", side_effect=capture):
+                with self.assertRaises(ReceptorPreparationError):
+                    vina_helper.prepare_receptor(self.pdb, self.out)
+        tmp_path = captured[captured.index("-i") + 1]
+        self.assertFalse(Path(tmp_path).exists())
 
 
 # ===========================================================================

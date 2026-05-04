@@ -21,13 +21,17 @@
 import logging
 import os
 import shutil
+import urllib.request
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from .Amino import check_3, get_1
+from .Amino import check_3, get_1, get_3
 from .exceptions import MutationError
+
+DATA_DIR = Path(__file__).parent.parent.parent / "data"
+NCBI_MATRIX_URL = "https://ftp.ncbi.nih.gov/blast/matrices/"
 
 # Configure logging
 logging.basicConfig(
@@ -239,6 +243,77 @@ def convert_cif_pdb(cif_file: str, pdb_file: Optional[str] = None) -> str:
         return pdb_file
     except Exception as e:
         raise MutationError(f"Failed to convert CIF to PDB '{cif_file}': {e}") from e
+
+
+def load_matrix(
+    file_path: str | Path = DATA_DIR / "PAM250",
+) -> dict[str, dict[str, int]]:
+    """Parse an NCBI-format substitution matrix file into 3-letter-coded dicts.
+
+    Lines starting with ``#`` are ignored.  The first non-comment line is
+    treated as the column header (one-letter codes).  Rows whose leading
+    letter does not map to a standard amino acid (B, Z, X, ``*``) are skipped.
+    """
+    path = Path(file_path)
+    columns: list[str] = []
+    result: dict[str, dict[str, int]] = {}
+
+    with open(path) as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            parts = stripped.split()
+            if not columns:
+                columns = parts
+                continue
+            three = get_3(parts[0])
+            if three is None:
+                continue
+            result[three] = {}
+            for col, val in zip(columns, parts[1:], strict=False):
+                col_three = get_3(col)
+                if col_three is None:
+                    continue
+                result[three][col_three] = int(val)
+
+    return result
+
+
+def download_matrix(name: str) -> Path:
+    """Download *name* from the NCBI BLAST matrices FTP into ``data/``."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    dest = DATA_DIR / name
+    url = NCBI_MATRIX_URL + name
+    logger.info("Downloading matrix '%s' from %s ...", name, url)
+    try:
+        urllib.request.urlretrieve(url, dest)
+    except Exception as e:
+        raise MutationError(f"Failed to download matrix '{name}': {e}") from e
+    logger.info("Saved to '%s'", dest)
+    return dest
+
+
+def resolve_matrix(
+    name: str = "PAM250", custom_file: Optional[str] = None
+) -> dict[str, dict[str, int]]:
+    """Return a scoring matrix, downloading from NCBI if not already in ``data/``.
+
+    If *custom_file* is given it is loaded directly, ignoring *name*.
+    Otherwise the matrix is looked up in ``data/``; if absent it is downloaded
+    from ``https://ftp.ncbi.nih.gov/blast/matrices/``.
+    """
+    if custom_file:
+        path = Path(custom_file)
+        if not path.is_file():
+            raise MutationError(f"Custom matrix file not found: '{custom_file}'")
+        return load_matrix(path)
+
+    name = name.upper()
+    path = DATA_DIR / name
+    if not path.is_file():
+        path = download_matrix(name)
+    return load_matrix(path)
 
 
 if __name__ == "__main__":

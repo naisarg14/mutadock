@@ -290,100 +290,74 @@ def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> str:
 
 
 def prepare_receptor(
-    receptor_filename: str, outputfilename: Optional[str] = None
+    receptor_filename: str,
+    outputfilename: Optional[str] = None,
+    ph: float = 7.4,
 ) -> None:
-    """Convert a PDB receptor file to PDBQT format using AutoDockTools.
+    """Convert a PDB or CIF receptor file to PDBQT format.
 
-    Adds hydrogens, computes Gasteiger charges, and removes waters.  All
-    stdout/stderr from AutoDockTools is suppressed.
+    Fixes the structure with PDBFixer (missing residues/atoms, nonstandard
+    residues, hydrogens at *ph*), writes a temporary PDB, then converts it
+    to PDBQT via meeko's ``mk_receptor`` CLI.  The temporary file is always
+    removed when the function exits.
 
     Args:
-        receptor_filename: Path to the input PDB receptor file.
-        outputfilename: Destination PDBQT path.  Defaults to appending ``qt``
-            to the input filename.
+        receptor_filename: Path to the input receptor file (``.pdb`` or ``.cif``).
+        outputfilename: Destination PDBQT path.  Defaults to replacing the
+            input extension with ``.pdbqt``.
+        ph: pH used when adding missing hydrogens (default 7.4).
 
     Raises:
-        ReceptorPreparationError: If preparation fails for any reason.
+        ReceptorPreparationError: If preparation or conversion fails.
     """
-    try:
-        import os
-        import sys
+    import subprocess
+    import sys
+    import tempfile
 
-        from AutoDockTools.MoleculePreparation import AD4ReceptorPreparation
-        from MolKit import Read
+    try:
+        from openmm.app import PDBFile
+        from pdbfixer import PDBFixer
     except ModuleNotFoundError:
         msg = "Error with importing modules for preparing receptor files for Docking.\n"
-        msg += "Easaies way to fix this is to install AutoDockTools_py3 using the following command:\n\n"
-        msg += "'python -m pip install git+https://github.com/Valdes-Tresanco-MS/AutoDockTools_py3'\n"
-        msg += "If you already have AutoDockTools_py3 installed, please check the installation.\n"
+        msg += "Install pdbfixer and openmm:\n\n"
+        msg += "  conda install -c conda-forge pdbfixer openmm\n"
+        msg += "  or: python -m pip install pdbfixer openmm\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
         logger.error(msg)
         sys.exit(2)
-    finally:
-        original_stdout = os.dup(1)
-        original_stderr = os.dup(2)
-    with open(os.devnull, "w") as fnull:
-        os.dup2(fnull.fileno(), 1)
-        os.dup2(fnull.fileno(), 2)
 
-        if outputfilename is None:
-            outputfilename = f"{receptor_filename}qt"
+    if outputfilename is None:
+        outputfilename = str(Path(receptor_filename).with_suffix(".pdbqt"))
 
-        repairs = "hydrogens"
-        charges_to_add = "gasteiger"
-        cleanup = "waters"
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix="_fixed.pdb")
+    try:
+        fixer = PDBFixer(filename=receptor_filename)
+        fixer.findMissingResidues()
+        fixer.findNonstandardResidues()
+        fixer.replaceNonstandardResidues()
+        fixer.removeHeterogens(keepWater=False)
+        fixer.findMissingAtoms()
+        fixer.addMissingAtoms()
+        fixer.addMissingHydrogens(ph)
 
-        mode = "automatic"
-        delete_single_nonstd_residues = None
-        dictionary = None
-        unique_atom_names = False
+        with open(tmp_fd, "w") as f:
+            PDBFile.writeFile(fixer.topology, fixer.positions, f)
 
-        _error = None
-        try:
-            mols = Read(receptor_filename)
-            mol = mols[0]
-            if unique_atom_names:
-                for at in mol.allAtoms:
-                    if mol.allAtoms.get(at.name) > 1:
-                        at.name = at.name + str(at._uniqIndex + 1)
-
-            if len(mols) > 1:
-                ctr = 1
-                for m in mols[1:]:
-                    ctr += 1
-                    if len(m.allAtoms) > len(mol.allAtoms):
-                        mol = m
-
-            mol.buildBondsByDistance()
-            alt_loc_ats = mol.allAtoms.get(lambda x: "@" in x.name)
-            len_alt_loc_ats = len(alt_loc_ats)
-            if len_alt_loc_ats:
-                logger.warning(
-                    f"WARNING! {mol.name} has {len_alt_loc_ats} alternate location atoms!\nUse prepare_pdb_split_alt_confs.py to create pdb files containing a single conformation.\n"
-                )
-
-            AD4ReceptorPreparation(
-                mol,
-                mode,
-                repairs,
-                charges_to_add,
-                cleanup,
-                outputfilename=outputfilename,
-                delete_single_nonstd_residues=delete_single_nonstd_residues,
-                dict=dictionary,
-            )
-        except Exception as e:
-            _error = e
-        finally:
-            os.dup2(original_stdout, 1)
-            os.dup2(original_stderr, 2)
-            os.close(original_stdout)
-            os.close(original_stderr)
-
-    if _error is not None:
+        result = subprocess.run(
+            ["mk_receptor", "-i", tmp_path, "-o", outputfilename],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"mk_receptor failed:\n{result.stderr.strip()}")
+    except ReceptorPreparationError:
+        raise
+    except Exception as e:
         raise ReceptorPreparationError(
-            f"Failed to prepare receptor '{receptor_filename}': {_error}"
-        ) from _error
+            f"Failed to prepare receptor '{receptor_filename}': {e}"
+        ) from e
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
 
 
 def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:

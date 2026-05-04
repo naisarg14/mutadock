@@ -1,126 +1,258 @@
 # MUTADOCK
 
-## Introduction
-MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking. It provides tools and methods to analyze and predict the effects of mutations on receptor-ligand interactions, enabling researchers to study protein function and drug binding affinity in a detailed manner.
+[![License: GPL v3](https://img.shields.io/badge/license-GPL--3.0-blue.svg)](LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/mutadock.svg)](https://pypi.org/project/mutadock/)
+[![Python](https://img.shields.io/pypi/pyversions/mutadock.svg)](https://pypi.org/project/mutadock/)
+[![Docs](https://readthedocs.org/projects/mutadock/badge/?version=latest)](https://mutadock.readthedocs.io/en/latest/)
 
-### Description
-Our software is designed to facilitate protein mutation analysis and molecular docking. It integrates automated protein mutation using PyRosetta and a docking library capable of docking multiple proteins with multiple ligands.
+## Introduction
+
+MUTADOCK is a comprehensive library for protein mutation studies and multi-receptor/multi-ligand docking. It integrates automated protein mutation via PyRosetta with an AutoDock Vina docking pipeline, enabling systematic exploration of how mutations affect receptor–ligand binding affinity.
 
 ### Key Features
-#### Automated Protein Mutation:
-- Utilizes PyRosetta for systematic protein mutations.
-- Supports various mutation strategies (e.g., single-point mutations, double-point mutations and triple-point mutations).
-- Allows customization of mutation and docking parameters.
-#### Docking Library:
-- Capable of docking a list of proteins against a list of ligands.
-- Employs AutoDock Vina to predict binding affinities and best poses.
-- Provides detailed output files with docking scores and poses.
-#### User Interface:
-- **Command-Line Interface:** Simple CLI for both beginner and expert users.
-- **Python Bindings:** The library can be imported in other codes for increased customizability by expert users
+
+**Automated Protein Mutation**
+- Single-, double-, and triple-point mutation prediction using PyRosetta
+- ΔΔG scoring to rank mutations by stability change
+- Flexible substitution matrix support: built-in PAM250 and BLOSUM62, any matrix from the [NCBI BLAST FTP](https://ftp.ncbi.nih.gov/blast/matrices/) (downloaded automatically), or a custom file
+
+**Docking Pipeline**
+- Batch docking of N receptors × M ligands with AutoDock Vina
+- Automatic receptor preparation via PDBFixer + meeko (`mk_receptor`)
+- Ligand preparation via meeko + RDKit
+- Accepts both `.pdb` and `.cif` receptor files
+
+**Usability**
+- Simple CLI for each workflow step
+- Python API for scripting and integration into existing pipelines
 
 
-## Try it Now
-The basic codes to perform mutation studies as used by us for our project can be found in a Jupyter Notebook here. The same notebook can be found on collab here.
+## System Requirements
 
-## How To Guide
+| Requirement | Minimum |
+|-------------|---------|
+| Python | 3.11 or 3.12 |
+| RAM | 8 GB (16 GB recommended for PyRosetta) |
+| Disk | ~6 GB (PyRosetta installation) |
+| OS | Linux, macOS, Windows |
 
-### Installation
-MutaDock has been deployed on PyPi, making installation quick and simple
-```
+AutoDock Vina must be installed separately — see [Vina installation](https://autodock-vina.readthedocs.io/en/latest/installation.html).
+
+
+## Installation
+
+```bash
 pip install mutadock
 ```
 
-The Pyrosetta Installer will be automatically installed but Pyrosetta should be installed using
-```
+Install PyRosetta (required for ΔΔG calculations):
+
+```bash
 md_install_dependencies
 ```
-this will install all dependencies including Pyrosetta.
 
-- Currently there is a problem with the vina on PyPi, so vina needs to be installed separately, the installation guide can be found at https://autodock-vina.readthedocs.io/en/latest/installation.html
+Install receptor preparation dependencies (conda recommended for pdbfixer/openmm):
 
+```bash
+conda install -c conda-forge pdbfixer openmm
+```
+
+
+## Quick Start
+
+The `data/` directory in this repository contains a sample receptor (`4QJR.cif`) and ligand (`Ligand.sdf`) you can use to try the workflow immediately.
+
+### 1. Generate mutation candidates
+
+```bash
+md_csv_generator -i data/4QJR.cif -o mutations.csv -O mutations_all.csv
+```
+
+Use a different substitution matrix (downloaded automatically if not present locally):
+
+```bash
+md_csv_generator -i data/4QJR.cif --matrix BLOSUM62
+```
+
+Use a custom matrix file:
+
+```bash
+md_csv_generator -i data/4QJR.cif --matrix-file /path/to/my_matrix.txt
+```
+
+### 2. Run the full mutation pipeline
+
+```bash
+md_mutate -i data/4QJR.cif
+```
+
+This generates all output files described in the [Mutation Output](#mutation-output) table and produces `4QJR_modified_mutants.txt` listing every mutated PDB for use with `md_dock`.
+
+### 3. Dock receptors against a ligand
+
+Create a ligand list:
+
+```bash
+echo "data/Ligand.sdf" > ligands.txt
+```
+
+Then dock against all mutants (or any receptor list):
+
+```bash
+md_dock -r 4QJR_modified_mutants.txt -l ligands.txt -c config.txt
+```
+
+
+## How-To Guide
 
 ### Mutation Studies
-Mutation Studies for a protein is a very fast process with just a PDB file of the protein as the input. (We assume for the tutorial that the name of the PDB file is “protein.pdb”)
 
-```
+`md_mutate` takes a PDB or CIF file and runs the complete mutation and ΔΔG pipeline.
+
+```bash
 md_mutate -i protein.pdb
+md_mutate -h   # all options
 ```
 
-Other optional arguments can be changed as required, to check the usage run
-```
-md_mutate -h
-```
+#### Mutation Output
 
-The md_mutate will output CSV files and one text file, their description is in the table below:
-| **No.** | **File Name**                           | **Description**                                                                                       |
-|-----|-------------------------------------|---------------------------------------------------------------------------------------------------|
-| 1.  | protein_modified_mutations_all.csv  | Contains all possible mutations for the given protein                                             |
-| 2.  | protein_modified_mutations.csv      | Contains mutations that are possible according to the PAM matrix for the given protein            |
-| 3.  | protein_modified_mutations_ddG.csv  | The single mutation ddG values for the mutation in the File-2                                      |
-| 4.  | protein_modified_mutations_ddG_sorted.csv | Sorted File-3 from lowest to highest ddG values                                               |
-| 5.  | protein_modified_double_ddg.csv     | The ddG values of the double mutation for all the combinations of the most negative single ddG compounds |
-| 6.  | protein_modified_double_ddg_sorted.csv | Sorted File-5 from lowest to highest ddG values                                               |
-| 7.  | protein_modified_triple_ddg.csv     | The ddG values of the triple mutation for all the combinations of the most negative double ddG compounds |
-| 8.  | protein_modified_triple_ddg_sorted.csv | Sorted File-7 from lowest to highest ddG values                                               |
-| 9.  | protein_modified_mutants.txt        | Generates a list of all the mutated PDB files created. Can be directly used as input for the md_dock command in our mutadock library |
-
+| # | File | Description |
+|---|------|-------------|
+| 1 | `protein_modified_mutations_all.csv` | All possible single-residue substitutions |
+| 2 | `protein_modified_mutations.csv` | Substitutions with positive matrix score |
+| 3 | `protein_modified_mutations_ddG.csv` | ΔΔG for each mutation in file 2 |
+| 4 | `protein_modified_mutations_ddG_sorted.csv` | File 3 sorted lowest→highest ΔΔG |
+| 5 | `protein_modified_double_ddg.csv` | Double-mutation ΔΔG combinations |
+| 6 | `protein_modified_double_ddg_sorted.csv` | File 5 sorted |
+| 7 | `protein_modified_triple_ddg.csv` | Triple-mutation ΔΔG combinations |
+| 8 | `protein_modified_triple_ddg_sorted.csv` | File 7 sorted |
+| 9 | `protein_modified_mutants.txt` | List of mutated PDB paths (direct input for `md_dock`) |
 
 ### Docking Studies
-Docking for multiple receptors and ligands is made simple and efficient by mutadock. The text files containing the names of the receptors and ligands need to be given as input, after that everything is automated. (If md_mutate is used, the text file for receptor is generated automatically)
-Every receptor in the receptor file will be docked with every ligand in the ligand file. A standard Vina configuration file or an AutoSIte prediction output is required.
-Example:
-```
+
+```bash
 md_dock -r receptors.txt -l ligands.txt -c config.txt
+md_dock -h   # all options
 ```
-Other optional arguments can be changed as required, to check the usage run
-```
-md_dock -h
-```
-The output of md_dock with their description is in the table below:
-| **No.** | **Output**              | **Description**                                                                                       |
-|-----|---------------------|---------------------------------------------------------------------------------------------------|
-| 1.  | PDBQT files         | The receptors and ligands will be converted to PDBQT files for AutoDock Vina.                     |
-| 2.  | Output Log          | The output of AutoDock Vina with the docking scores will be stored in a log file for each combination. |
-| 3.  | Output PDB          | The output of AutoDock Vina with the 5 best docking poses will be stored in a PDB file for each combination. |
-| 4.  | Output PDBQT        | The output of AutoDock Vina Split with the best pose will be stored in a PDBQT file for each combination. |
-| 5.  | Output SDF          | The best pose after docking will be stored in a SDF file for visualization and better usability.  |
-| 6.  | Docking Results CSV | All the docking affinities are tabulated in a CSV to make analysis trivial.                       |
+
+Every receptor in `receptors.txt` is docked against every ligand in `ligands.txt`. Receptors can be `.pdb` or `.cif` — they are fixed and converted to PDBQT automatically.
+
+#### Docking Output
+
+| # | Output | Description |
+|---|--------|-------------|
+| 1 | PDBQT files | Prepared receptor and ligand files |
+| 2 | Log file | Vina output with binding scores per combination |
+| 3 | Output PDB | Top 5 docking poses per combination |
+| 4 | Output PDBQT | Best pose (Vina split) per combination |
+| 5 | Output SDF | Best pose as SDF for visualization |
+| 6 | `docking_results.csv` | All affinities tabulated for easy analysis |
 
 
-### All CLI Scripts
-| **No.** | **Command**            | **Description**                                                                           |
-|-----|--------------------|---------------------------------------------------------------------------------------|
-| 1.  | md_mutate          | Predicts the best mutation of the given protein                                       |
-| 2.  | md_dock            | Docked all combinations from a list of receptors and ligands                          |
-| 3.  | md_vina_dock       | CLI for AutoDock Vina                                                                 |
-| 4.  | md_csv_generator   | Generates all possible mutations for a protein and also the mutations possible according to PAM Matrix |
-| 5.  | md_csv_sort        | Can sort any CSV file according to the column name or number chosen                   |
-| 6.  | md_ddg_single      | Calculates single ddG values for a given CSV of mutations                             |
-| 7.  | md_ddg_double      | Calculates double ddG values for all combinations using a given CSV of mutations      |
-| 8.  | md_ddg_triple      | Calculates triple ddG values for all combinations using a given CSV of mutations      |
+## CLI Reference
+
+| Command | Description |
+|---------|-------------|
+| `md_mutate` | Full mutation + ΔΔG pipeline from a PDB/CIF file |
+| `md_dock` | Batch receptor–ligand docking |
+| `md_vina_dock` | Direct AutoDock Vina CLI wrapper |
+| `md_csv_generator` | Generate all possible substitutions with matrix scoring |
+| `md_csv_sort` | Sort any CSV by column name or number |
+| `md_ddg_single` | Calculate single-mutation ΔΔG from a mutations CSV |
+| `md_ddg_double` | Calculate double-mutation ΔΔG combinations |
+| `md_ddg_triple` | Calculate triple-mutation ΔΔG combinations |
+
+
+## Python API
+
+```python
+# --- Mutation ---
+from mutation.csv_generator import generate_csv
+from mutation.helpers import resolve_matrix, load_matrix
+
+# Generate mutation CSV with default matrix (PAM250)
+generate_csv("data/4QJR.cif")
+
+# Use BLOSUM62 (downloaded automatically if absent)
+generate_csv("data/4QJR.cif", matrix="BLOSUM62")
+
+# Load a matrix directly
+score_dict = load_matrix("data/PAM250")   # dict[str, dict[str, int]], 3-letter keys
+score_dict = resolve_matrix("PAM30")      # downloads PAM30 from NCBI if needed
+
+# --- Docking ---
+from docking.vina_helper import prepare_receptor, prepare_ligand, dock_vina
+
+prepare_receptor("data/4QJR.cif", "receptor.pdbqt")        # PDB or CIF
+prepare_ligand("data/Ligand.sdf", "ligand.pdbqt")
+
+dock_vina(
+    receptor="receptor.pdbqt",
+    ligand="ligand.pdbqt",
+    output="output.pdbqt",
+    log_file="vina.log",
+    center=[10.0, 5.0, 20.0],
+    box_size=[20.0, 20.0, 20.0],
+)
+```
+
+
+## Troubleshooting
+
+**`mk_receptor: command not found`**
+meeko is not installed or not on PATH.
+```bash
+pip install meeko
+```
+
+**`pdbfixer` / `openmm` import error during receptor preparation**
+```bash
+conda install -c conda-forge pdbfixer openmm
+# or
+pip install pdbfixer openmm
+```
+
+**PyRosetta fails to install**
+Run the bundled installer which handles license and platform detection:
+```bash
+md_install_dependencies
+```
+
+**`vina: command not found`**
+Vina is not bundled with mutadock. Install it from the [official guide](https://autodock-vina.readthedocs.io/en/latest/installation.html).
+
+**Matrix download fails**
+If NCBI FTP is unreachable, download the matrix manually and use `--matrix-file`:
+```bash
+md_csv_generator -i protein.pdb --matrix-file /path/to/PAM30
+```
+
+**CIF file not recognized**
+PDBFixer and BioPython both support `.cif` natively. Make sure the file extension is `.cif` or `.pdb` — other extensions are not accepted.
 
 
 ## Applications
-- **Protein Engineering:** Designing mutated proteins with enhanced stability or new functionalities.
-- **Drug Discovery:** Screening potential drug candidates by predicting binding affinities.
-- **Biochemical Research:** Studying protein-ligand interactions to understand biological processes.
+
+- **Protein Engineering:** Identify stabilising mutations for therapeutic proteins
+- **Drug Discovery:** Screen mutant variants for changes in binding affinity
+- **Biochemical Research:** Study how point mutations alter protein–ligand interactions
+
+
+## Contributing
+
+Bug reports and pull requests are welcome at [github.com/naisarg14/mutadock](https://github.com/naisarg14/mutadock/issues). Please open an issue before submitting a large PR so we can discuss the approach.
 
 
 ## Documentation
-- README is included in the repository to serve as a comprehensive guide
-- ReadtheDocs Page for updated documentation can be found [here](https://mutadock.readthedocs.io/en/latest/#)
+
+Full API reference: [mutadock.readthedocs.io](https://mutadock.readthedocs.io/en/latest/)
 
 
-## Future Developments
-- **Developing a Graphical User Interface (GUI):** Enhancing user experience by providing a user-friendly interface for easier interaction with the software.
-- **Creating a Web Server:** Allowing remote access and usage of the software through a web-based platform, making it accessible from anywhere.
-- **Increasing Parameter Customizability:** Offering more options for users to fine-tune mutation and docking parameters to suit specific research needs and conditions.
+## License
 
-
-## Acknowledgements
-- Open-source tools and libraries used in the development.
+[GNU General Public License v3.0](LICENSE) — © 2026 Naisarg Patel
 
 
 ## Contact
-- For questions, suggestions, or collaboration, please contact [Naisarg Patel](mailto:naisarg.patel14@hotmail.com).
+
+[naisarg.patel14@hotmail.com](mailto:naisarg.patel14@hotmail.com)

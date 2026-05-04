@@ -16,6 +16,8 @@ dependencies = [
   'biopython',
   'meeko',
   'numpy',
+  'openmm',
+  'pdbfixer',
   'pyrosetta-installer',
   'tqdm',
   'pyarrow',

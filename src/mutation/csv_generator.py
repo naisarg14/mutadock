@@ -25,9 +25,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .Amino import get_dict, get_scfn_250
+from .Amino import get_dict
 from .exceptions import CSVGenerationError, MutationError, PDBFileError
-from .helpers import backup, convert_cif_pdb
+from .helpers import backup, convert_cif_pdb, resolve_matrix
 
 # Configure logging
 logging.basicConfig(
@@ -49,12 +49,16 @@ except ImportError:
 
 def main() -> None:
     """CLI entry point for ``md_csv_generator``."""
-    pdb_file, out_op, out_all = get_inputs()
-    generate_csv(pdb_file, out_all, out_op)
+    pdb_file, out_op, out_all, matrix, matrix_file = get_inputs()
+    generate_csv(pdb_file, out_all, out_op, matrix=matrix, matrix_file=matrix_file)
 
 
 def generate_csv(
-    pdb_file: str, out_all: Optional[str] = None, out_op: Optional[str] = None
+    pdb_file: str,
+    out_all: Optional[str] = None,
+    out_op: Optional[str] = None,
+    matrix: str = "PAM250",
+    matrix_file: Optional[str] = None,
 ) -> tuple[str, str]:
     """Generate mutation CSV files for all possible substitutions in a PDB.
 
@@ -62,6 +66,9 @@ def generate_csv(
         pdb_file: Path to the PDB file.
         out_all: Output path for the full mutations CSV (all prProb values).
         out_op: Output path for the filtered CSV (prProb > 0).
+        matrix: Name of a scoring matrix in ``data/`` or available on the NCBI
+            BLAST FTP server (e.g. ``"PAM250"``, ``"BLOSUM62"``).
+        matrix_file: Path to a custom matrix file; overrides *matrix*.
 
     Returns:
         ``(out_op, out_all)`` paths.
@@ -69,6 +76,7 @@ def generate_csv(
     Raises:
         PDBFileError: If the PDB file cannot be read.
         CSVGenerationError: If the PDB file contains no residues.
+        MutationError: If the matrix cannot be loaded or downloaded.
     """
     if not out_all:
         out_all = f"{pdb_file.removesuffix('.pdb')}_mutations_all.csv"
@@ -103,7 +111,7 @@ def generate_csv(
     count1 = 1
     count2 = 1
     aa_dict = get_dict()
-    score_dict = get_scfn_250()
+    score_dict = resolve_matrix(matrix, matrix_file)
     for key in residues:
         residue = residues[key]
         for aa in aa_dict:
@@ -164,9 +172,9 @@ def get_residues(file: str) -> dict[int, tuple[str, int, str]]:
     return residues
 
 
-def get_inputs() -> tuple[str, Optional[str], Optional[str]]:
+def get_inputs() -> tuple[str, Optional[str], Optional[str], str, Optional[str]]:
     parser = argparse.ArgumentParser(
-        description="This program takes as input a PDB file and generates all possible mutations and also gives the PAM250 score.",
+        description="Generate all possible single-residue mutations for a PDB file, scored by a substitution matrix.",
         epilog="Written by Naisarg Patel (https://github.com/naisarg14)",
     )
     parser.add_argument(
@@ -181,6 +189,22 @@ def get_inputs() -> tuple[str, Optional[str], Optional[str]]:
     )
     parser.add_argument(
         "-O", "--all", help="Output CSV for all posible mutations", metavar="FILE"
+    )
+    parser.add_argument(
+        "--matrix",
+        default="PAM250",
+        help=(
+            "Scoring matrix name (default: PAM250). Must be present in data/ or available "
+            "at https://ftp.ncbi.nih.gov/blast/matrices/ — it will be downloaded automatically "
+            "if not found locally. Examples: BLOSUM62, PAM30, PAM70."
+        ),
+        metavar="NAME",
+    )
+    parser.add_argument(
+        "--matrix-file",
+        default=None,
+        help="Path to a custom substitution matrix file (overrides --matrix).",
+        metavar="FILE",
     )
 
     args = parser.parse_args()
@@ -209,7 +233,7 @@ def get_inputs() -> tuple[str, Optional[str], Optional[str]]:
     if full_pdb_path.suffix != ".pdb":
         sys.exit("Given file is not a PDB file, input should be a PDB file.")
 
-    return str(full_pdb_path), args.positive, args.all
+    return str(full_pdb_path), args.positive, args.all, args.matrix, args.matrix_file
 
 
 if __name__ == "__main__":

@@ -18,8 +18,9 @@ from unittest.mock import MagicMock, patch
 # Bio / PyRosetta / tqdm stubs are already injected by conftest.py before
 # this module is imported, so no additional stub setup is needed here.
 # ---------------------------------------------------------------------------
-from mutation.Amino import get_dict, get_scfn_250
+from mutation.Amino import get_dict
 from mutation.csv_generator import generate_csv, get_residues
+from mutation.helpers import DATA_DIR, load_matrix
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -308,7 +309,7 @@ class TestGenerateCsv(unittest.TestCase):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
         rows = self._read_csv(out_op)
-        score_dict = get_scfn_250()
+        score_dict = load_matrix(DATA_DIR / "PAM250")
         for row in rows:
             wt = row["wtAA"]
             pr = row["prAA"]
@@ -388,7 +389,7 @@ class TestGenerateCsv(unittest.TestCase):
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
-        score_dict = get_scfn_250()
+        score_dict = load_matrix(DATA_DIR / "PAM250")
         expected_wt_prob = score_dict["LEU"]["LEU"] / 100.0
         for row in self._read_csv(out_all):
             self.assertAlmostEqual(float(row["wtProb"]), expected_wt_prob)
@@ -444,26 +445,26 @@ class TestGenerateCsv(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests: PAM250 matrix sanity (Amino module)
+# Tests: PAM250 matrix sanity (load_matrix)
 # ---------------------------------------------------------------------------
 
 
 class TestPAM250Matrix(unittest.TestCase):
 
     def test_matrix_covers_all_20_amino_acids(self):
-        score_dict = get_scfn_250()
+        score_dict = load_matrix(DATA_DIR / "PAM250")
         aa_dict = get_dict()
         self.assertEqual(set(score_dict.keys()), set(aa_dict.keys()))
 
     def test_diagonal_is_positive(self):
         """Each amino acid scores highest against itself."""
-        score_dict = get_scfn_250()
+        score_dict = load_matrix(DATA_DIR / "PAM250")
         for aa, row in score_dict.items():
             self.assertGreater(row[aa], 0, msg=f"Diagonal for {aa} is not positive")
 
     def test_matrix_is_symmetric(self):
         """PAM250 should be symmetric: score[a][b] == score[b][a]."""
-        score_dict = get_scfn_250()
+        score_dict = load_matrix(DATA_DIR / "PAM250")
         for aa1, row in score_dict.items():
             for aa2, val in row.items():
                 self.assertEqual(
