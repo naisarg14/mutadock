@@ -20,6 +20,7 @@ from unittest.mock import MagicMock, patch
 # ---------------------------------------------------------------------------
 from mutation.Amino import get_dict
 from mutation.csv_generator import generate_csv, get_residues
+from mutation.exceptions import CSVGenerationError, PDBFileError
 from mutation.helpers import DATA_DIR, load_matrix
 
 # ---------------------------------------------------------------------------
@@ -53,12 +54,12 @@ def _make_mock_structure(residues: list) -> MagicMock:
 
 class TestGetResidues(unittest.TestCase):
 
-    def test_returns_none_for_nonexistent_file(self):
-        """FileNotFoundError from PDBParser.get_structure → None."""
+    def test_raises_for_nonexistent_file(self):
+        """FileNotFoundError from PDBParser.get_structure → PDBFileError."""
         with patch("mutation.csv_generator.PDBParser") as MockParser:
             MockParser.return_value.get_structure.side_effect = FileNotFoundError
-            result = get_residues("/nonexistent/path/fake_protein.pdb")
-        self.assertIsNone(result)
+            with self.assertRaises(PDBFileError):
+                get_residues("/nonexistent/path/fake_protein.pdb")
 
     def test_returns_dict_for_valid_structure(self):
         """Two residues in PDB → first skipped, second stored."""
@@ -208,21 +209,21 @@ class TestGenerateCsv(unittest.TestCase):
 
     # --- tests ---
 
-    def test_returns_none_when_get_residues_returns_none(self):
+    def test_raises_when_get_residues_returns_none(self):
         with (
             patch("mutation.csv_generator.get_residues", return_value=None),
             patch("mutation.csv_generator.backup"),
         ):
-            result = generate_csv(self.pdb_file)
-        self.assertIsNone(result)
+            with self.assertRaises(CSVGenerationError):
+                generate_csv(self.pdb_file)
 
-    def test_returns_none_when_residues_empty(self):
+    def test_raises_when_residues_empty(self):
         with (
             patch("mutation.csv_generator.get_residues", return_value={}),
             patch("mutation.csv_generator.backup"),
         ):
-            result = generate_csv(self.pdb_file)
-        self.assertIsNone(result)
+            with self.assertRaises(CSVGenerationError):
+                generate_csv(self.pdb_file)
 
     def test_returns_tuple_of_two_paths(self):
         out_op = str(self.tmpdir / "op.csv")

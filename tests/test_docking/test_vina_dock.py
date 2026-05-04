@@ -16,6 +16,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from docking import vina_dock
+from docking.exceptions import DockingRunError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,30 +56,29 @@ class TestVinaDock(unittest.TestCase):
     # Input validation                                                     #
     # ------------------------------------------------------------------ #
 
-    def test_missing_receptor_returns_false(self):
+    def test_missing_receptor_raises(self):
         stub, _, _ = _make_vina_stub()
         with patch.dict(sys.modules, {"vina": stub}):
-            result = vina_dock.vina_dock("ghost_rec.pdbqt", self.ligand, self.output)
-        self.assertIs(result[0], False)
-        self.assertIn("Receptor file not found", result[1])
+            with self.assertRaises(DockingRunError) as ctx:
+                vina_dock.vina_dock("ghost_rec.pdbqt", self.ligand, self.output)
+        self.assertIn("Receptor file not found", str(ctx.exception))
 
-    def test_missing_ligand_returns_false(self):
+    def test_missing_ligand_raises(self):
         stub, _, _ = _make_vina_stub()
         with patch.dict(sys.modules, {"vina": stub}):
-            result = vina_dock.vina_dock(self.receptor, "ghost_lig.pdbqt", self.output)
-        self.assertIs(result[0], False)
-        self.assertIn("Ligand file not found", result[1])
+            with self.assertRaises(DockingRunError) as ctx:
+                vina_dock.vina_dock(self.receptor, "ghost_lig.pdbqt", self.output)
+        self.assertIn("Ligand file not found", str(ctx.exception))
 
     # ------------------------------------------------------------------ #
     # Success path                                                         #
     # ------------------------------------------------------------------ #
 
-    def test_success_returns_true_and_message(self):
+    def test_success_does_not_raise(self):
         stub, _, _ = _make_vina_stub()
         with patch.dict(sys.modules, {"vina": stub}):
             result = vina_dock.vina_dock(self.receptor, self.ligand, self.output)
-        self.assertTrue(result[0])
-        self.assertEqual(result[1], "Docking successful")
+        self.assertIsNone(result)
 
     def test_set_receptor_called_with_path(self):
         stub, _, mock_v = _make_vina_stub()
@@ -128,26 +128,26 @@ class TestVinaDock(unittest.TestCase):
     # Failure paths                                                        #
     # ------------------------------------------------------------------ #
 
-    def test_vina_not_installed_returns_false(self):
+    def test_vina_not_installed_exits(self):
         """Simulate missing vina package by putting None sentinel in sys.modules."""
         with patch.dict(sys.modules, {"vina": None}):
-            result = vina_dock.vina_dock(self.receptor, self.ligand, self.output)
-        self.assertIs(result[0], False)
+            with self.assertRaises(SystemExit):
+                vina_dock.vina_dock(self.receptor, self.ligand, self.output)
 
-    def test_exception_during_docking_returns_false_with_message(self):
+    def test_exception_during_docking_raises_docking_run_error(self):
         stub, _, mock_v = _make_vina_stub()
         mock_v.dock.side_effect = RuntimeError("search failed")
         with patch.dict(sys.modules, {"vina": stub}):
-            result = vina_dock.vina_dock(self.receptor, self.ligand, self.output)
-        self.assertIs(result[0], False)
-        self.assertIn("Docking failed", result[1])
+            with self.assertRaises(DockingRunError) as ctx:
+                vina_dock.vina_dock(self.receptor, self.ligand, self.output)
+        self.assertIn("Docking failed", str(ctx.exception))
 
-    def test_exception_during_write_poses_returns_false(self):
+    def test_exception_during_write_poses_raises_docking_run_error(self):
         stub, _, mock_v = _make_vina_stub()
         mock_v.write_poses.side_effect = OSError("disk full")
         with patch.dict(sys.modules, {"vina": stub}):
-            result = vina_dock.vina_dock(self.receptor, self.ligand, self.output)
-        self.assertIs(result[0], False)
+            with self.assertRaises(DockingRunError):
+                vina_dock.vina_dock(self.receptor, self.ligand, self.output)
 
 
 if __name__ == "__main__":

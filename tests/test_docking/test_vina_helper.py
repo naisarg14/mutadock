@@ -17,6 +17,12 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from docking import vina_helper
+from docking.exceptions import (
+    ConfigError,
+    DockingRunError,
+    LigandPreparationError,
+    PDBFileError,
+)
 
 # ---------------------------------------------------------------------------
 # Minimal valid PDB ATOM lines that satisfy vina_helper's regex
@@ -95,10 +101,9 @@ class TestReadPdbFile(unittest.TestCase):
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def test_returns_error_tuple_for_nonexistent_file(self):
-        result = vina_helper.read_pdb_file(str(self.tmpdir / "ghost.pdb"))
-        self.assertIsInstance(result, tuple)
-        self.assertIs(result[0], False)
+    def test_raises_for_nonexistent_file(self):
+        with self.assertRaises(PDBFileError):
+            vina_helper.read_pdb_file(str(self.tmpdir / "ghost.pdb"))
 
     def test_returns_list_for_valid_pdb(self):
         path = str(self.tmpdir / "a.pdb")
@@ -164,11 +169,12 @@ class TestCalculateGeometricCenter(unittest.TestCase):
 
 class TestCalculateRadius(unittest.TestCase):
 
-    def test_passes_through_error_tuple(self):
-        err = Exception("bad read")
-        with patch.object(vina_helper, "read_pdb_file", return_value=(False, err)):
-            result = vina_helper.calculate_radius("fake.pdb")
-        self.assertIs(result[0], False)
+    def test_propagates_pdb_file_error(self):
+        with patch.object(
+            vina_helper, "read_pdb_file", side_effect=PDBFileError("bad read")
+        ):
+            with self.assertRaises(PDBFileError):
+                vina_helper.calculate_radius("fake.pdb")
 
     def test_single_atom_at_center_gives_zero_radius(self):
         atoms = [{"x": 1.0, "y": 2.0, "z": 3.0}]
@@ -290,21 +296,20 @@ class TestPrepareLigand(unittest.TestCase):
     def _modules(self, meeko_stub, rdkit_stub):
         return {"meeko": meeko_stub, "rdkit": rdkit_stub, "rdkit.Chem": rdkit_stub.Chem}
 
-    def test_unsupported_format_returns_false(self):
+    def test_unsupported_format_raises(self):
         meeko_stub, rdkit_stub = self._stubs()
         with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
-            result = vina_helper.prepare_ligand("molecule.xyz")
-        self.assertIs(result[0], False)
-        self.assertIn("SDF or MOL2", str(result[1]))
+            with self.assertRaises(LigandPreparationError) as ctx:
+                vina_helper.prepare_ligand("molecule.xyz")
+        self.assertIn("SDF or MOL2", str(ctx.exception))
 
-    def test_success_returns_true_and_pdbqt_string(self):
+    def test_success_returns_pdbqt_string(self):
         in_file = str(self.tmpdir / "lig.sdf")
         Path(in_file).write_text("mol")
         meeko_stub, rdkit_stub = self._stubs("MY_PDBQT")
         with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
             result = vina_helper.prepare_ligand(in_file)
-        self.assertTrue(result[0])
-        self.assertEqual(result[1], "MY_PDBQT")
+        self.assertEqual(result, "MY_PDBQT")
 
     def test_sdf_default_output_name(self):
         in_file = str(self.tmpdir / "lig.sdf")
@@ -315,14 +320,14 @@ class TestPrepareLigand(unittest.TestCase):
             vina_helper.prepare_ligand(in_file)
         self.assertTrue(Path(expected_out).is_file())
 
-    def test_exception_returns_false_tuple(self):
+    def test_exception_raises_ligand_preparation_error(self):
         in_file = str(self.tmpdir / "lig.sdf")
         Path(in_file).write_text("mol")
         meeko_stub, rdkit_stub = self._stubs()
         rdkit_stub.Chem.AddHs.side_effect = RuntimeError("bad mol")
         with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
-            result = vina_helper.prepare_ligand(in_file)
-        self.assertIs(result[0], False)
+            with self.assertRaises(LigandPreparationError):
+                vina_helper.prepare_ligand(in_file)
 
 
 # ===========================================================================
@@ -492,8 +497,7 @@ class TestAddScoreToCsv(unittest.TestCase):
 
     def test_name_derived_by_removing_out_pdb_suffix(self):
         out = str(self.tmpdir / "rec_lig_out.pdb")
-        success, name = vina_helper.add_score_to_csv(out, self.csv_file, -5.0)
-        self.assertTrue(success)
+        name = vina_helper.add_score_to_csv(out, self.csv_file, -5.0)
         self.assertEqual(name, "rec_lig")
 
     def test_affinity_written_correctly(self):
@@ -502,9 +506,10 @@ class TestAddScoreToCsv(unittest.TestCase):
             rows = list(csv.reader(f))
         self.assertIn("-8.3", rows[0][2])
 
-    def test_returns_true_on_success(self):
+    def test_returns_name_string_on_success(self):
         result = vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.0)
-        self.assertTrue(result[0])
+        self.assertIsInstance(result, str)
+        self.assertTrue(result)
 
 
 # ===========================================================================
@@ -528,45 +533,42 @@ class TestReadConfig(unittest.TestCase):
             f.write(content)
         return path
 
-    def test_returns_false_for_nonexistent_file(self):
-        result = vina_helper.read_config(str(self.tmpdir / "ghost.txt"))
-        self.assertIs(result[0], False)
+    def test_raises_for_nonexistent_file(self):
+        with self.assertRaises(ConfigError):
+            vina_helper.read_config(str(self.tmpdir / "ghost.txt"))
 
-    def test_parses_center_values_as_strings(self):
+    def test_parses_center_values_as_floats(self):
         path = self._write_config("center_x = 1.5\ncenter_y = 2.5\ncenter_z = 3.5\n")
         result = vina_helper.read_config(path)
-        self.assertTrue(result[0])
-        center = result[1]
-        self.assertEqual(center[0], "1.5")
-        self.assertEqual(center[1], "2.5")
-        self.assertEqual(center[2], "3.5")
+        center = result[0]
+        self.assertAlmostEqual(center[0], 1.5)
+        self.assertAlmostEqual(center[1], 2.5)
+        self.assertAlmostEqual(center[2], 3.5)
 
     def test_parses_box_size(self):
         path = self._write_config("size_x = 20\nsize_y = 25\nsize_z = 30\n")
         result = vina_helper.read_config(path)
-        self.assertEqual(result[2][0], "20")
+        self.assertAlmostEqual(result[1][0], 20.0)
 
     def test_uses_defaults_for_missing_keys(self):
         path = self._write_config("")
         result = vina_helper.read_config(path)
-        self.assertTrue(result[0])
-        self.assertEqual(result[1][0], "0.0")  # center_x default
+        self.assertAlmostEqual(result[0][0], 0.0)  # center_x default
 
     def test_ignores_comment_lines(self):
         path = self._write_config("# this is a comment\ncenter_x = 5.0\n")
         result = vina_helper.read_config(path)
-        self.assertTrue(result[0])
-        self.assertEqual(result[1][0], "5.0")
+        self.assertAlmostEqual(result[0][0], 5.0)
 
-    def test_returns_seven_element_tuple_on_success(self):
+    def test_returns_six_element_tuple_on_success(self):
         path = self._write_config("")
         result = vina_helper.read_config(path)
-        self.assertEqual(len(result), 7)
+        self.assertEqual(len(result), 6)
 
     def test_exhaustiveness_default_is_32(self):
         path = self._write_config("")
         result = vina_helper.read_config(path)
-        self.assertEqual(result[3], "32")
+        self.assertEqual(result[2], 32)
 
 
 # ===========================================================================
@@ -595,21 +597,17 @@ class TestDockVina(unittest.TestCase):
         mock_result.returncode = returncode
         return mock_result
 
-    def test_success_returns_true(self):
+    def test_success_does_not_raise(self):
         with patch("subprocess.run", return_value=self._mock_subprocess(0)):
             result = vina_helper.dock_vina(
                 self.receptor, self.ligand, self.output, self.log
             )
-        self.assertTrue(result[0])
-        self.assertEqual(result[1], "")
+        self.assertIsNone(result)
 
-    def test_subprocess_failure_returns_false_with_log_path(self):
+    def test_subprocess_failure_raises_docking_run_error(self):
         with patch("subprocess.run", return_value=self._mock_subprocess(1)):
-            result = vina_helper.dock_vina(
-                self.receptor, self.ligand, self.output, self.log
-            )
-        self.assertIs(result[0], False)
-        self.assertIn(self.log, result[1])
+            with self.assertRaises(DockingRunError):
+                vina_helper.dock_vina(self.receptor, self.ligand, self.output, self.log)
 
     def test_command_contains_receptor_and_ligand(self):
         with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:

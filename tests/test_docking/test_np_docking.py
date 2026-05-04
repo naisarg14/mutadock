@@ -16,6 +16,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 from docking import np_docking
+from docking.exceptions import (
+    DockingRunError,
+    LigandPreparationError,
+    ReceptorPreparationError,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers for prepare_inputs() — patch sys.argv
@@ -245,7 +250,7 @@ class TestNaisarg(unittest.TestCase):
             ),
             patch(
                 "docking.np_docking.prepare_receptor",
-                return_value=(False, "bad receptor"),
+                side_effect=ReceptorPreparationError("bad receptor"),
             ),
             patch("docking.np_docking.prepare_ligand", return_value=(True, "")),
             patch("docking.np_docking.dock_vina", return_value=(True, "")) as mock_dock,
@@ -264,7 +269,8 @@ class TestNaisarg(unittest.TestCase):
             ),
             patch("docking.np_docking.prepare_receptor", return_value=(True, "")),
             patch(
-                "docking.np_docking.prepare_ligand", return_value=(False, "bad ligand")
+                "docking.np_docking.prepare_ligand",
+                side_effect=LigandPreparationError("bad ligand"),
             ),
             patch("docking.np_docking.dock_vina", return_value=(True, "")) as mock_dock,
             patch("docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")),
@@ -282,7 +288,10 @@ class TestNaisarg(unittest.TestCase):
             ),
             patch("docking.np_docking.prepare_receptor", return_value=(True, "")),
             patch("docking.np_docking.prepare_ligand", return_value=(True, "")),
-            patch("docking.np_docking.dock_vina", return_value=(False, "vina error")),
+            patch(
+                "docking.np_docking.dock_vina",
+                side_effect=DockingRunError("vina error"),
+            ),
             patch(
                 "docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
             ) as mock_split,

@@ -310,6 +310,7 @@ def prepare_receptor(
     Raises:
         ReceptorPreparationError: If preparation or conversion fails.
     """
+    import os
     import subprocess
     import sys
     import tempfile
@@ -330,6 +331,7 @@ def prepare_receptor(
         outputfilename = str(Path(receptor_filename).with_suffix(".pdbqt"))
 
     tmp_fd, tmp_path = tempfile.mkstemp(suffix="_fixed.pdb")
+    os.close(tmp_fd)
     try:
         fixer = PDBFixer(filename=receptor_filename)
         fixer.findMissingResidues()
@@ -340,7 +342,7 @@ def prepare_receptor(
         fixer.addMissingAtoms()
         fixer.addMissingHydrogens(ph)
 
-        with open(tmp_fd, "w") as f:
+        with open(tmp_path, "w") as f:
             PDBFile.writeFile(fixer.topology, fixer.positions, f)
 
         result = subprocess.run(

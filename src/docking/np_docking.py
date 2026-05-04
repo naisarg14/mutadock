@@ -360,5 +360,8 @@ def prepare_inputs() -> (
     )
 
 
+naisarg = np_docking
+
+
 if __name__ == "__main__":
     np_docking()

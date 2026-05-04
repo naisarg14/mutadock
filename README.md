@@ -4,6 +4,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/mutadock.svg)](https://pypi.org/project/mutadock/)
 [![Python](https://img.shields.io/pypi/pyversions/mutadock.svg)](https://pypi.org/project/mutadock/)
 [![Docs](https://readthedocs.org/projects/mutadock/badge/?version=latest)](https://mutadock.readthedocs.io/en/latest/)
+[![Coverage](https://img.shields.io/badge/coverage-45.45%25-yellow.svg)]()
 
 ## Introduction
 
