@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutadock"
-version = "1.9.3"
+version = "2.0.0"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
@@ -37,7 +37,7 @@ classifiers = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mutation", "src/docking"]
+sources = ["src"]
 
 [project.scripts]
 md_mutate = "mutation.np_mutation:naisarg"
@@ -48,10 +48,137 @@ md_csv_sort = "mutation.csv_sort:main"
 md_ddg_single = "mutation.ddg_calc:main"
 md_ddg_double = "mutation.ddg_calc_double:main"
 md_ddg_triple = "mutation.ddg_calc_triple:main"
-md_install_dependencies = "mutation.install_dependencies:main"
 
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "coverage[toml]>=7.0",
+  "pre-commit>=3.0",
+  "black>=24.0",
+  "ruff>=0.4",
+  "mypy>=1.10",
+  "isort>=5.13",
+]
+docs = [
+  "sphinx>=7.0",
+  "alabaster>=0.7",
+]
 
 [project.urls]
 Repository = "https://github.com/naisarg14/mutadock"
 Issues = "https://github.com/naisarg14/mutadock/issues"
 Documentation = "https://mutadock.readthedocs.io/en/latest/"
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+pythonpath = ["src"]
+addopts = [
+  "--strict-markers",
+  "-v",
+]
+markers = [
+  "mutation: tests for the mutation module",
+  "docking: tests for the docking module",
+  "unit: fast unit tests with mocked dependencies",
+  "slow: computationally expensive tests requiring real PyRosetta/Vina",
+]
+
+# ---------------------------------------------------------------------------
+# coverage
+# ---------------------------------------------------------------------------
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+  "tests/*",
+  "src/*/__init__.py",
+  "*/conftest.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+precision = 2
+exclude_lines = [
+  "pragma: no cover",
+  "if __name__ == .__main__.",
+  "raise NotImplementedError",
+  '\.\.\.',
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# ---------------------------------------------------------------------------
+# black
+# ---------------------------------------------------------------------------
+
+[tool.black]
+line-length = 88
+target-version = ["py311", "py312"]
+
+# ---------------------------------------------------------------------------
+# isort
+# ---------------------------------------------------------------------------
+
+[tool.isort]
+profile = "black"
+src_paths = ["src", "tests"]
+known_first_party = ["mutation", "docking"]
+
+# ---------------------------------------------------------------------------
+# ruff
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "B", "UP"]
+ignore = [
+  "E501",   # line length — enforced by black
+  "UP007",  # use X | Y for union types — Optional kept for clarity
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pyrosetta is imported via `from pyrosetta import *` inside a try block;
+# F403 = star import, F405 = name may be from star import
+"src/mutation/ddg_calc.py"        = ["F403", "F405"]
+"src/mutation/ddg_calc_double.py" = ["F403", "F405"]
+"src/mutation/ddg_calc_triple.py" = ["F403", "F405"]
+"src/mutation/generate_mutants.py" = ["F403", "F405"]
+"src/mutation/predict_ddG.py"     = ["F403", "F405"]
+# test files use wildcard fixture injection and broad mocks
+"tests/**/test_*.py"              = ["F811"]
+
+# ---------------------------------------------------------------------------
+# mypy
+# ---------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict_optional = true
+warn_unused_ignores = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mutation.ddg_calc",
+    "mutation.ddg_calc_double",
+    "mutation.ddg_calc_triple",
+    "mutation.generate_mutants",
+    "mutation.predict_ddG",
+]
+disable_error_code = ["name-defined"]

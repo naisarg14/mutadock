@@ -1,0 +1,605 @@
+"""
+Tests for docking.vina_helper
+-------------------------------
+External deps (meeko, rdkit, MolKit, AutoDockTools) are injected into
+sys.modules per-test using patch.dict so the real packages need not be installed.
+
+Run from the project root:
+    pytest tests/
+"""
+
+import csv
+import sys
+import tempfile
+import types
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+from docking import vina_helper
+
+# ---------------------------------------------------------------------------
+# Minimal valid PDB ATOM lines that satisfy vina_helper's regex
+# ---------------------------------------------------------------------------
+_ATOM1 = (
+    "ATOM      1  CA  ALA A   1       1.000   2.000   3.000  1.00  0.000           C\n"
+)
+_ATOM2 = (
+    "ATOM      2  CB  ALA A   1       4.000   5.000   6.000  1.00  0.000           C\n"
+)
+
+
+def _write_pdb(path, lines):
+    with open(path, "w") as f:
+        for line in lines:
+            f.write(line)
+
+
+# ===========================================================================
+# TestBackup
+# ===========================================================================
+
+
+class TestBackup(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_returns_false_for_nonexistent_file(self):
+        result = vina_helper.backup(str(self.tmpdir / "ghost.txt"))
+        self.assertFalse(result)
+
+    def test_returns_true_for_existing_file(self):
+        f = str(self.tmpdir / "test.txt")
+        Path(f).write_text("hello")
+        self.assertTrue(vina_helper.backup(f))
+
+    def test_original_file_removed_after_backup(self):
+        f = str(self.tmpdir / "test.txt")
+        Path(f).write_text("hello")
+        vina_helper.backup(f)
+        self.assertFalse(Path(f).exists())
+
+    def test_backup_directory_created(self):
+        f = str(self.tmpdir / "test.txt")
+        Path(f).write_text("hello")
+        vina_helper.backup(f)
+        self.assertTrue((self.tmpdir / "backups").is_dir())
+
+    def test_backed_up_filename_contains_original_stem(self):
+        f = str(self.tmpdir / "myfile.txt")
+        Path(f).write_text("data")
+        vina_helper.backup(f)
+        backups = list((Path(self.tmpdir) / "backups").iterdir())
+        self.assertEqual(len(backups), 1)
+        self.assertIn("myfile", backups[0].name)
+
+
+# ===========================================================================
+# TestReadPdbFile
+# ===========================================================================
+
+
+class TestReadPdbFile(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_returns_error_tuple_for_nonexistent_file(self):
+        result = vina_helper.read_pdb_file(str(self.tmpdir / "ghost.pdb"))
+        self.assertIsInstance(result, tuple)
+        self.assertIs(result[0], False)
+
+    def test_returns_list_for_valid_pdb(self):
+        path = str(self.tmpdir / "a.pdb")
+        _write_pdb(path, [_ATOM1])
+        result = vina_helper.read_pdb_file(path)
+        self.assertIsInstance(result, list)
+
+    def test_parses_coordinates(self):
+        path = str(self.tmpdir / "a.pdb")
+        _write_pdb(path, [_ATOM1])
+        atom = vina_helper.read_pdb_file(path)[0]
+        self.assertAlmostEqual(atom["x"], 1.0)
+        self.assertAlmostEqual(atom["y"], 2.0)
+        self.assertAlmostEqual(atom["z"], 3.0)
+
+    def test_parses_residue_name(self):
+        path = str(self.tmpdir / "a.pdb")
+        _write_pdb(path, [_ATOM1])
+        atom = vina_helper.read_pdb_file(path)[0]
+        self.assertEqual(atom["residue_name"], "ALA")
+
+    def test_empty_file_returns_empty_list(self):
+        path = str(self.tmpdir / "empty.pdb")
+        _write_pdb(path, [])
+        result = vina_helper.read_pdb_file(path)
+        self.assertEqual(result, [])
+
+
+# ===========================================================================
+# TestCalculateGeometricCenter
+# ===========================================================================
+
+
+class TestCalculateGeometricCenter(unittest.TestCase):
+
+    def test_single_atom_center_equals_atom_coords(self):
+        atoms = [{"x": 3.0, "y": 5.0, "z": 7.0}]
+        with patch.object(vina_helper, "read_pdb_file", return_value=atoms):
+            cx, cy, cz = vina_helper.calculate_geometric_center("fake.pdb")
+        self.assertAlmostEqual(cx, 3.0)
+        self.assertAlmostEqual(cy, 5.0)
+        self.assertAlmostEqual(cz, 7.0)
+
+    def test_two_atoms_center_is_midpoint(self):
+        atoms = [{"x": 0.0, "y": 0.0, "z": 0.0}, {"x": 4.0, "y": 6.0, "z": 8.0}]
+        with patch.object(vina_helper, "read_pdb_file", return_value=atoms):
+            cx, cy, cz = vina_helper.calculate_geometric_center("fake.pdb")
+        self.assertAlmostEqual(cx, 2.0)
+        self.assertAlmostEqual(cy, 3.0)
+        self.assertAlmostEqual(cz, 4.0)
+
+    def test_returns_three_element_tuple(self):
+        atoms = [{"x": 1.0, "y": 2.0, "z": 3.0}]
+        with patch.object(vina_helper, "read_pdb_file", return_value=atoms):
+            result = vina_helper.calculate_geometric_center("fake.pdb")
+        self.assertEqual(len(result), 3)
+
+
+# ===========================================================================
+# TestCalculateRadius
+# ===========================================================================
+
+
+class TestCalculateRadius(unittest.TestCase):
+
+    def test_passes_through_error_tuple(self):
+        err = Exception("bad read")
+        with patch.object(vina_helper, "read_pdb_file", return_value=(False, err)):
+            result = vina_helper.calculate_radius("fake.pdb")
+        self.assertIs(result[0], False)
+
+    def test_single_atom_at_center_gives_zero_radius(self):
+        atoms = [{"x": 1.0, "y": 2.0, "z": 3.0}]
+        with patch.object(vina_helper, "read_pdb_file", return_value=atoms):
+            r = vina_helper.calculate_radius("fake.pdb")
+        self.assertAlmostEqual(r, 0.0)
+
+    def test_known_radius(self):
+        # center = (0.5, 0, 0); max dist = 0.5
+        atoms = [{"x": 0.0, "y": 0.0, "z": 0.0}, {"x": 1.0, "y": 0.0, "z": 0.0}]
+        with patch.object(vina_helper, "read_pdb_file", return_value=atoms):
+            r = vina_helper.calculate_radius("fake.pdb")
+        self.assertAlmostEqual(r, 0.5)
+
+
+# ===========================================================================
+# TestVinaSplit
+# ===========================================================================
+
+
+class TestVinaSplit(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.pdbqt = str(self.tmpdir / "out.pdbqt")
+        with open(self.pdbqt, "w") as f:
+            f.write("REMARK VINA RESULT:     -8.500      0.000      0.000\n")
+            f.write("ATOM      1  C   LIG A   1       0.000   0.000   0.000\n")
+            f.write("ENDMDL\n")
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _meeko_stub(self, sdf_string="mol\n$$$$\n", failures=None):
+        if failures is None:
+            failures = []
+        mock_mol = MagicMock()
+        mock_rdkit_mol_create = MagicMock()
+        mock_rdkit_mol_create.write_sd_string.return_value = (sdf_string, failures)
+        stub = types.ModuleType("meeko")
+        stub.PDBQTMolecule = MagicMock(return_value=mock_mol)
+        stub.RDKitMolCreate = mock_rdkit_mol_create
+        return stub
+
+    def test_default_output_replaces_pdbqt_extension(self):
+        stub = self._meeko_stub()
+        with patch.dict(sys.modules, {"meeko": stub}):
+            _, out_file = vina_helper.vina_split(self.pdbqt)
+        self.assertEqual(out_file, self.pdbqt.replace(".pdbqt", "_ligand_1.sdf"))
+
+    def test_custom_output_file_used(self):
+        stub = self._meeko_stub()
+        custom = str(self.tmpdir / "custom.sdf")
+        with patch.dict(sys.modules, {"meeko": stub}):
+            _, out_file = vina_helper.vina_split(self.pdbqt, custom)
+        self.assertEqual(out_file, custom)
+
+    def test_returns_score_as_float(self):
+        stub = self._meeko_stub()
+        with patch.dict(sys.modules, {"meeko": stub}):
+            score, _ = vina_helper.vina_split(self.pdbqt)
+        self.assertIsInstance(score, float)
+        self.assertAlmostEqual(score, -8.5)
+
+    def test_raises_runtime_error_on_rdkit_failures(self):
+        stub = self._meeko_stub(failures=[1])
+        with patch.dict(sys.modules, {"meeko": stub}):
+            with self.assertRaises(RuntimeError):
+                vina_helper.vina_split(self.pdbqt)
+
+    def test_output_sdf_file_written(self):
+        stub = self._meeko_stub()
+        with patch.dict(sys.modules, {"meeko": stub}):
+            _, out_file = vina_helper.vina_split(self.pdbqt)
+        self.assertTrue(Path(out_file).is_file())
+
+
+# ===========================================================================
+# TestPrepareLigand
+# ===========================================================================
+
+
+class TestPrepareLigand(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _stubs(self, pdbqt_string="PDBQT_DATA"):
+        mock_mol = MagicMock()
+        mock_chem = MagicMock()
+        mock_chem.SDMolSupplier.return_value.__getitem__ = MagicMock(
+            return_value=mock_mol
+        )
+        mock_chem.MolFromMol2File.return_value = mock_mol
+        mock_chem.AddHs.return_value = mock_mol
+
+        mock_setup = MagicMock()
+        mock_mp = MagicMock()
+        mock_mp.return_value.prepare.return_value = [mock_setup]
+        mock_writer = MagicMock()
+        mock_writer.write_string.return_value = (pdbqt_string, True, "")
+
+        meeko_stub = types.ModuleType("meeko")
+        meeko_stub.MoleculePreparation = mock_mp
+        meeko_stub.PDBQTWriterLegacy = mock_writer
+
+        rdkit_stub = types.ModuleType("rdkit")
+        rdkit_stub.Chem = mock_chem
+
+        return meeko_stub, rdkit_stub
+
+    def _modules(self, meeko_stub, rdkit_stub):
+        return {"meeko": meeko_stub, "rdkit": rdkit_stub, "rdkit.Chem": rdkit_stub.Chem}
+
+    def test_unsupported_format_returns_false(self):
+        meeko_stub, rdkit_stub = self._stubs()
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            result = vina_helper.prepare_ligand("molecule.xyz")
+        self.assertIs(result[0], False)
+        self.assertIn("SDF or MOL2", str(result[1]))
+
+    def test_success_returns_true_and_pdbqt_string(self):
+        in_file = str(self.tmpdir / "lig.sdf")
+        Path(in_file).write_text("mol")
+        meeko_stub, rdkit_stub = self._stubs("MY_PDBQT")
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            result = vina_helper.prepare_ligand(in_file)
+        self.assertTrue(result[0])
+        self.assertEqual(result[1], "MY_PDBQT")
+
+    def test_sdf_default_output_name(self):
+        in_file = str(self.tmpdir / "lig.sdf")
+        Path(in_file).write_text("mol")
+        expected_out = in_file.removesuffix(".sdf") + ".pdbqt"
+        meeko_stub, rdkit_stub = self._stubs()
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            vina_helper.prepare_ligand(in_file)
+        self.assertTrue(Path(expected_out).is_file())
+
+    def test_exception_returns_false_tuple(self):
+        in_file = str(self.tmpdir / "lig.sdf")
+        Path(in_file).write_text("mol")
+        meeko_stub, rdkit_stub = self._stubs()
+        rdkit_stub.Chem.AddHs.side_effect = RuntimeError("bad mol")
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            result = vina_helper.prepare_ligand(in_file)
+        self.assertIs(result[0], False)
+
+
+# ===========================================================================
+# TestPrepareReceptor
+# ===========================================================================
+
+
+class TestPrepareReceptor(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.pdb = str(self.tmpdir / "rec.pdb")
+        Path(self.pdb).touch()
+        self.out = str(self.tmpdir / "rec.pdbqt")
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _molkit_stubs(self):
+        mock_mol = MagicMock()
+        mock_mol.allAtoms.get.return_value = []
+        mock_mol.name = "rec"
+        mock_read = MagicMock(return_value=[mock_mol])
+
+        molkit_stub = types.ModuleType("MolKit")
+        molkit_stub.Read = mock_read
+
+        adt_mol_prep = types.ModuleType("AutoDockTools.MoleculePreparation")
+        adt_mol_prep.AD4ReceptorPreparation = MagicMock()
+        adt_stub = types.ModuleType("AutoDockTools")
+        adt_stub.MoleculePreparation = adt_mol_prep
+
+        return molkit_stub, adt_stub, adt_mol_prep
+
+    def _modules(self, molkit_stub, adt_stub, adt_mol_prep):
+        return {
+            "MolKit": molkit_stub,
+            "AutoDockTools": adt_stub,
+            "AutoDockTools.MoleculePreparation": adt_mol_prep,
+        }
+
+    def test_success_returns_true_empty_string(self):
+        molkit_stub, adt_stub, adt_mol_prep = self._molkit_stubs()
+        with patch.dict(
+            sys.modules, self._modules(molkit_stub, adt_stub, adt_mol_prep)
+        ):
+            result = vina_helper.prepare_receptor(self.pdb, self.out)
+        self.assertTrue(result[0])
+        self.assertEqual(result[1], "")
+
+    def test_exception_in_read_returns_false(self):
+        molkit_stub, adt_stub, adt_mol_prep = self._molkit_stubs()
+        molkit_stub.Read.side_effect = RuntimeError("cannot read")
+        with patch.dict(
+            sys.modules, self._modules(molkit_stub, adt_stub, adt_mol_prep)
+        ):
+            result = vina_helper.prepare_receptor(self.pdb, self.out)
+        self.assertIs(result[0], False)
+        self.assertIsInstance(result[1], RuntimeError)
+
+
+# ===========================================================================
+# TestAddScoreToCsv
+# ===========================================================================
+
+
+class TestAddScoreToCsv(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.csv_file = str(self.tmpdir / "results.csv")
+        self.out_pdb = str(self.tmpdir / "rec_lig_out.pdb")
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_creates_csv_if_absent(self):
+        vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
+        self.assertTrue(Path(self.csv_file).is_file())
+
+    def test_first_row_has_sr_1(self):
+        vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
+        with open(self.csv_file) as f:
+            rows = list(csv.reader(f))
+        self.assertEqual(rows[0][0], "1")
+
+    def test_serial_number_increments(self):
+        vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
+        vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -6.0)
+        with open(self.csv_file) as f:
+            rows = list(csv.reader(f))
+        self.assertEqual(rows[1][0], "2")
+
+    def test_name_derived_by_removing_out_pdb_suffix(self):
+        out = str(self.tmpdir / "rec_lig_out.pdb")
+        success, name = vina_helper.add_score_to_csv(out, self.csv_file, -5.0)
+        self.assertTrue(success)
+        self.assertEqual(name, "rec_lig")
+
+    def test_affinity_written_correctly(self):
+        vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -8.3)
+        with open(self.csv_file) as f:
+            rows = list(csv.reader(f))
+        self.assertIn("-8.3", rows[0][2])
+
+    def test_returns_true_on_success(self):
+        result = vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.0)
+        self.assertTrue(result[0])
+
+
+# ===========================================================================
+# TestReadConfig
+# ===========================================================================
+
+
+class TestReadConfig(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _write_config(self, content):
+        path = str(self.tmpdir / "config.txt")
+        with open(path, "w") as f:
+            f.write(content)
+        return path
+
+    def test_returns_false_for_nonexistent_file(self):
+        result = vina_helper.read_config(str(self.tmpdir / "ghost.txt"))
+        self.assertIs(result[0], False)
+
+    def test_parses_center_values_as_strings(self):
+        path = self._write_config("center_x = 1.5\ncenter_y = 2.5\ncenter_z = 3.5\n")
+        result = vina_helper.read_config(path)
+        self.assertTrue(result[0])
+        center = result[1]
+        self.assertEqual(center[0], "1.5")
+        self.assertEqual(center[1], "2.5")
+        self.assertEqual(center[2], "3.5")
+
+    def test_parses_box_size(self):
+        path = self._write_config("size_x = 20\nsize_y = 25\nsize_z = 30\n")
+        result = vina_helper.read_config(path)
+        self.assertEqual(result[2][0], "20")
+
+    def test_uses_defaults_for_missing_keys(self):
+        path = self._write_config("")
+        result = vina_helper.read_config(path)
+        self.assertTrue(result[0])
+        self.assertEqual(result[1][0], "0.0")  # center_x default
+
+    def test_ignores_comment_lines(self):
+        path = self._write_config("# this is a comment\ncenter_x = 5.0\n")
+        result = vina_helper.read_config(path)
+        self.assertTrue(result[0])
+        self.assertEqual(result[1][0], "5.0")
+
+    def test_returns_seven_element_tuple_on_success(self):
+        path = self._write_config("")
+        result = vina_helper.read_config(path)
+        self.assertEqual(len(result), 7)
+
+    def test_exhaustiveness_default_is_32(self):
+        path = self._write_config("")
+        result = vina_helper.read_config(path)
+        self.assertEqual(result[3], "32")
+
+
+# ===========================================================================
+# TestDockVina
+# ===========================================================================
+
+
+class TestDockVina(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+        self.receptor = str(self.tmpdir / "rec.pdbqt")
+        self.ligand = str(self.tmpdir / "lig.pdbqt")
+        self.output = str(self.tmpdir / "out.pdbqt")
+        self.log = str(self.tmpdir / "log.txt")
+        Path(self.receptor).touch()
+        Path(self.ligand).touch()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _mock_subprocess(self, returncode=0):
+        mock_result = MagicMock()
+        mock_result.returncode = returncode
+        return mock_result
+
+    def test_success_returns_true(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess(0)):
+            result = vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log
+            )
+        self.assertTrue(result[0])
+        self.assertEqual(result[1], "")
+
+    def test_subprocess_failure_returns_false_with_log_path(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess(1)):
+            result = vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log
+            )
+        self.assertIs(result[0], False)
+        self.assertIn(self.log, result[1])
+
+    def test_command_contains_receptor_and_ligand(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(self.receptor, self.ligand, self.output, self.log)
+        cmd = mock_run.call_args[0][0]
+        self.assertIn(self.receptor, cmd)
+        self.assertIn(self.ligand, cmd)
+
+    def test_nooverwrite_flag_added_when_overwrite_false(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log, overwrite=False
+            )
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--nooverwrite", cmd)
+
+    def test_nooverwrite_flag_absent_when_overwrite_true(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log, overwrite=True
+            )
+        cmd = mock_run.call_args[0][0]
+        self.assertNotIn("--nooverwrite", cmd)
+
+    def test_center_included_in_command(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(
+                self.receptor,
+                self.ligand,
+                self.output,
+                self.log,
+                center=[1.5, 2.5, 3.5],
+            )
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("1.5", cmd)
+
+    def test_config_values_override_center(self):
+        config_path = str(self.tmpdir / "cfg.txt")
+        with open(config_path, "w") as f:
+            f.write("center_x = 9.0\ncenter_y = 8.0\ncenter_z = 7.0\n")
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log, config=config_path
+            )
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("9.0", cmd)
+
+    def test_autosite_overrides_center(self):
+        with (
+            patch.object(
+                vina_helper, "calculate_geometric_center", return_value=(5.0, 6.0, 7.0)
+            ),
+            patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run,
+        ):
+            vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log, autosite="site.pdb"
+            )
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("5.0", cmd)
+
+
+if __name__ == "__main__":
+    unittest.main()

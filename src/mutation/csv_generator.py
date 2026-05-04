@@ -3,7 +3,7 @@
 #                              Name: MUTADOCK                                  #
 #                           Author: Naisarg Patel                              #
 #                                                                              #
-#       Copyright (C) 2024 Naisarg Patel (https://github.com/naisarg14)        #
+#       Copyright (C) 2026 Naisarg Patel (https://github.com/naisarg14)        #
 #                                                                              #
 #          Project: https://github.com/naisarg14/mutadock                      #
 #                                                                              #
@@ -18,17 +18,20 @@
 ################################################################################
 
 
-import csv, os, sys
-import logging
-from typing import Optional, Dict, Tuple
-from mutation.Amino import get_dict, get_scfn_250
-from mutation.helpers import backup, convert_cif_pdb
 import argparse
+import csv
+import logging
+import sys
+from pathlib import Path
+from typing import Optional
+
+from .Amino import get_dict, get_scfn_250
+from .exceptions import CSVGenerationError, MutationError, PDBFileError
+from .helpers import backup, convert_cif_pdb
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -45,22 +48,38 @@ except ImportError:
 
 
 def main() -> None:
+    """CLI entry point for ``md_csv_generator``."""
     pdb_file, out_op, out_all = get_inputs()
     generate_csv(pdb_file, out_all, out_op)
 
 
-def generate_csv(pdb_file: str, out_all: Optional[str] = None, out_op: Optional[str] = None) -> Optional[Tuple[str, str]]:
+def generate_csv(
+    pdb_file: str, out_all: Optional[str] = None, out_op: Optional[str] = None
+) -> tuple[str, str]:
+    """Generate mutation CSV files for all possible substitutions in a PDB.
+
+    Args:
+        pdb_file: Path to the PDB file.
+        out_all: Output path for the full mutations CSV (all prProb values).
+        out_op: Output path for the filtered CSV (prProb > 0).
+
+    Returns:
+        ``(out_op, out_all)`` paths.
+
+    Raises:
+        PDBFileError: If the PDB file cannot be read.
+        CSVGenerationError: If the PDB file contains no residues.
+    """
     if not out_all:
         out_all = f"{pdb_file.removesuffix('.pdb')}_mutations_all.csv"
     if not out_op:
         out_op = f"{pdb_file.removesuffix('.pdb')}_mutations.csv"
-    
+
     if out_all == out_op:
         out_all = out_all.removesuffix(".csv") + "_all.csv"
     residues = get_residues(pdb_file)
     if not residues:
-        logger.error("Check File Name")
-        return None
+        raise CSVGenerationError(f"No residues found in PDB file '{pdb_file}'")
 
     backup(out_op)
     backup(out_all)
@@ -70,23 +89,23 @@ def generate_csv(pdb_file: str, out_all: Optional[str] = None, out_op: Optional[
     writer_all = csv.writer(f_all)
     writer_op = csv.writer(f)
     header = [
-            "sr",
-            "pdb",
-            "chain",
-            "position",
-            "wtAA",
-            "prAA",
-            "wtProb",
-            "prProb",
-        ]
+        "sr",
+        "pdb",
+        "chain",
+        "position",
+        "wtAA",
+        "prAA",
+        "wtProb",
+        "prProb",
+    ]
     writer_all.writerow(header)
     writer_op.writerow(header)
     count1 = 1
     count2 = 1
     aa_dict = get_dict()
     score_dict = get_scfn_250()
-    for residue in residues:
-        residue = residues[residue]
+    for key in residues:
+        residue = residues[key]
         for aa in aa_dict:
             if aa == residue[2]:
                 continue
@@ -111,14 +130,25 @@ def generate_csv(pdb_file: str, out_all: Optional[str] = None, out_op: Optional[
     return out_op, out_all
 
 
-def get_residues(file: str) -> Optional[Dict[int, Tuple[str, int, str]]]:
-    residues: Dict[int, Tuple[str, int, str]] = {}
+def get_residues(file: str) -> dict[int, tuple[str, int, str]]:
+    """Parse residue information from a PDB file.
+
+    Args:
+        file: Path to the PDB file.
+
+    Returns:
+        Mapping of sequential index to ``(chain_id, position, residue_name)``.
+
+    Raises:
+        PDBFileError: If the file is not found.
+    """
+    residues: dict[int, tuple[str, int, str]] = {}
     count = 0
     parser = PDBParser(PERMISSIVE=1)
     try:
         structure = parser.get_structure(file, file)
-    except FileNotFoundError:
-        return None
+    except FileNotFoundError as e:
+        raise PDBFileError(f"PDB file not found: '{file}'") from e
     for model in structure:
         for chain in model:
             for residue in chain:
@@ -126,48 +156,60 @@ def get_residues(file: str) -> Optional[Dict[int, Tuple[str, int, str]]]:
                     count += 1
                     continue
                 full_id = residue.get_full_id()
-                chain = full_id[2]
+                chain_id = full_id[2]
                 position = full_id[3][1]
                 name = residue.get_resname()
-                residues[count] = (chain, position, name)
+                residues[count] = (chain_id, position, name)
                 count += 1
     return residues
 
-def get_inputs() -> Tuple[str, Optional[str], Optional[str]]:
-    parser = argparse.ArgumentParser(description="This program takes as input a PDB file and generates all possible mutations and also gives the PAM250 score.", epilog="Written by Naisarg Patel (https://github.com/naisarg14)")
-    parser.add_argument("-i",'--input', help="PDB File for predicting mutations", metavar="PDB", required=True)
-    parser.add_argument("-o", "--positive", help="Output CSV for only non-zero values", metavar="FILE")
-    parser.add_argument("-O", "--all", help="Output CSV for all posible mutations", metavar="FILE")
+
+def get_inputs() -> tuple[str, Optional[str], Optional[str]]:
+    parser = argparse.ArgumentParser(
+        description="This program takes as input a PDB file and generates all possible mutations and also gives the PAM250 score.",
+        epilog="Written by Naisarg Patel (https://github.com/naisarg14)",
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        help="PDB File for predicting mutations",
+        metavar="PDB",
+        required=True,
+    )
+    parser.add_argument(
+        "-o", "--positive", help="Output CSV for only non-zero values", metavar="FILE"
+    )
+    parser.add_argument(
+        "-O", "--all", help="Output CSV for all posible mutations", metavar="FILE"
+    )
 
     args = parser.parse_args()
 
     pdb_file = args.input
 
-    if not os.path.isabs(pdb_file):
+    pdb_path = Path(pdb_file)
+    if not pdb_path.is_absolute():
         logger.info("Assuming current directory as root since path not specified.")
-        dir = os.getcwd()
-        file = pdb_file
+        full_pdb_path = Path.cwd() / pdb_file
     else:
-        dir, file = os.path.split(os.path.abspath(pdb_file))
+        full_pdb_path = pdb_path
 
-    full_pdb_path = os.path.join(dir, file)
-
-    if full_pdb_path.endswith(".cif"):
-        result = convert_cif_pdb(full_pdb_path)
-        if result[0]:
-            full_pdb_path = result[1]
-        else:
-            logger.error("Error converting CIF to PDB: %s", result[1])
+    if full_pdb_path.suffix == ".cif":
+        try:
+            full_pdb_path = Path(convert_cif_pdb(str(full_pdb_path)))
+        except MutationError as e:
+            logger.error("Error converting CIF to PDB: %s", e)
             sys.exit(2)
 
+    if not full_pdb_path.is_file():
+        sys.exit(
+            "No such file found in current directory, enter full path for other directories."
+        )
 
-    if not os.path.isfile(full_pdb_path):
-        sys.exit("No such file found in current directory, enter full path for other directories.")
-
-    if not file.endswith(".pdb"):
+    if full_pdb_path.suffix != ".pdb":
         sys.exit("Given file is not a PDB file, input should be a PDB file.")
 
-    return full_pdb_path, args.positive, args.all
+    return str(full_pdb_path), args.positive, args.all
 
 
 if __name__ == "__main__":

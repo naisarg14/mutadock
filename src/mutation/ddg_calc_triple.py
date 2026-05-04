@@ -3,7 +3,7 @@
 #                              Name: MUTADOCK                                  #
 #                           Author: Naisarg Patel                              #
 #                                                                              #
-#       Copyright (C) 2024 Naisarg Patel (https://github.com/naisarg14)        #
+#       Copyright (C) 2026 Naisarg Patel (https://github.com/naisarg14)        #
 #                                                                              #
 #          Project: https://github.com/naisarg14/mutadock                      #
 #                                                                              #
@@ -18,24 +18,32 @@
 ################################################################################
 
 
-import mutation.predict_ddG as predict_ddG
-from itertools import combinations
+import argparse
+import csv
 import logging
-from typing import Tuple, Optional, List, Dict
-from mutation.Amino import get_1
-from mutation.helpers import backup
-import os, sys, argparse, csv
+import os
+import sys
+from itertools import combinations
+from pathlib import Path
+from typing import Optional
+
+from . import predict_ddG
+from .Amino import get_1
+from .helpers import backup, in_directory
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 try:
+    sys.stdout = open(os.devnull, "w")
     from pyrosetta import *
+
+    sys.stdout = sys.__stdout__
 except ImportError:
+    sys.stdout = sys.__stdout__
     msg = "Error with importing pyrosetta module for mutation using mutadock.\n"
     msg += "Easiest way to fix this is to install pyrosetta using the following command:\n\n"
     msg += "python -m pip install pyrosetta_installer && python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'\n"
@@ -59,25 +67,51 @@ except ImportError:
 
 def main() -> None:
     full_pdb_path, full_csv_path, total, out_csv = get_inputs()
-    calc_triple_ddg(pdb_file=full_pdb_path, double_csv=full_csv_path, total=total, out_csv=out_csv)
+    calc_triple_ddg(
+        pdb_file=full_pdb_path, double_csv=full_csv_path, total=total, out_csv=out_csv
+    )
 
 
-def calc_triple_ddg(pdb_file: str, double_csv: str, out_csv: Optional[str] = None, total: int = 0) -> str:
+def calc_triple_ddg(
+    pdb_file: str, double_csv: str, out_csv: Optional[str] = None, total: int = 0
+) -> str:
     if not out_csv:
         out_csv = f"{pdb_file.removesuffix('.pdb')}_triple_ddg.csv"
     backup(out_csv)
 
     result = get_mut_csv(double_csv, total)
 
-    sys.stdout = open(os.devnull, 'w')
-    init('-mute all')
+    sys.stdout = open(os.devnull, "w")
+    init("-mute all")
     sys.stdout = sys.__stdout__
-    
+
     with open(out_csv, "w+") as out:
-        writer = csv.DictWriter(out, fieldnames=["sr", "pdb", "combination", "mut1_wtAA", "chain1", "mut1_position", "mut1_prAA", "mut2_wtAA", "chain2", "mut2_position", "mut2_prAA", "mut3_wtAA", "chain3", "mut3_position", "mut3_prAA", "triple_ddG_value"])
+        writer = csv.DictWriter(
+            out,
+            fieldnames=[
+                "sr",
+                "pdb",
+                "combination",
+                "mut1_wtAA",
+                "chain1",
+                "mut1_position",
+                "mut1_prAA",
+                "mut2_wtAA",
+                "chain2",
+                "mut2_position",
+                "mut2_prAA",
+                "mut3_wtAA",
+                "chain3",
+                "mut3_position",
+                "mut3_prAA",
+                "triple_ddG_value",
+            ],
+        )
         writer.writeheader()
         count = 1
-        pose = pose_from_pdb(pdb_file)
+        pdb_path = Path(pdb_file).resolve()
+        with in_directory(pdb_path.parent):
+            pose = pose_from_pdb(pdb_path.name)
         sfxn = get_fa_scorefxn()
         score_1 = sfxn.score(pose)
         for x in tqdm(combinations(result, 3)):
@@ -105,9 +139,19 @@ def calc_triple_ddg(pdb_file: str, double_csv: str, out_csv: Optional[str] = Non
 
             name = f"{count}_{old1}_{position1}_{mutation1}+{old2}_{position2}_{mutation2}+{old3}_{position3}_{mutation3}"
 
-            pose_m1 = predict_ddG.mutate_residue(pose, pose_position1, get_1(mutation1), 8.0, sfxn)
-            pose_m2 = predict_ddG.mutate_residue(pose_m1, pose_position2, get_1(mutation2), 8.0, sfxn)
-            pose_m3 = predict_ddG.mutate_residue(pose_m2, pose_position3, get_1(mutation3), 8.0, sfxn)
+            aa1 = get_1(mutation1)
+            aa2 = get_1(mutation2)
+            aa3 = get_1(mutation3)
+            assert aa1 is not None, f"Unknown amino acid code: {mutation1}"
+            assert aa2 is not None, f"Unknown amino acid code: {mutation2}"
+            assert aa3 is not None, f"Unknown amino acid code: {mutation3}"
+            pose_m1 = predict_ddG.mutate_residue(pose, pose_position1, aa1, 8.0, sfxn)
+            pose_m2 = predict_ddG.mutate_residue(
+                pose_m1, pose_position2, aa2, 8.0, sfxn
+            )
+            pose_m3 = predict_ddG.mutate_residue(
+                pose_m2, pose_position3, aa3, 8.0, sfxn
+            )
             score_2 = sfxn.score(pose_m3)
             ddG = score_2 - score_1
             writer.writerow(
@@ -134,7 +178,7 @@ def calc_triple_ddg(pdb_file: str, double_csv: str, out_csv: Optional[str] = Non
         return out_csv
 
 
-def get_mut_csv(file: str, total: int = -1) -> List[Dict[str, str]]:
+def get_mut_csv(file: str, total: int = -1) -> list[dict[str, str]]:
     with open(file) as f:
         reader = csv.DictReader(f)
         results = []
@@ -142,12 +186,22 @@ def get_mut_csv(file: str, total: int = -1) -> List[Dict[str, str]]:
         if total == -1:
             total = 100000
         for row in reader:
-            mutation = {"chain": row["chain1"], "position": row["mut1_position"], "wtAA": row["mut1_wtAA"], "prAA": row["mut1_prAA"]}
+            mutation = {
+                "chain": row["chain1"],
+                "position": row["mut1_position"],
+                "wtAA": row["mut1_wtAA"],
+                "prAA": row["mut1_prAA"],
+            }
             if mutation not in results:
                 results.append(mutation.copy())
                 count += 1
 
-            mutation = {"chain": row["chain2"], "position": row["mut2_position"], "wtAA": row["mut2_wtAA"], "prAA": row["mut2_prAA"]}
+            mutation = {
+                "chain": row["chain2"],
+                "position": row["mut2_position"],
+                "wtAA": row["mut2_wtAA"],
+                "prAA": row["mut2_prAA"],
+            }
             if mutation not in results:
                 results.append(mutation.copy())
                 count += 1
@@ -158,13 +212,23 @@ def get_mut_csv(file: str, total: int = -1) -> List[Dict[str, str]]:
     return results
 
 
-def get_inputs() -> Tuple[str, str, int, Optional[str]]:
+def get_inputs() -> tuple[str, str, int, Optional[str]]:
     parser = argparse.ArgumentParser(
-        description="Takes input a PDB file and CSV of mutations and then calculated the Triple ddG values for all the mutations.", epilog="Written by Naisarg Patel (https://github.com/naisarg14)"
+        description="Takes input a PDB file and CSV of mutations and then calculated the Triple ddG values for all the mutations.",
+        epilog="Written by Naisarg Patel (https://github.com/naisarg14)",
     )
     parser.add_argument("-p", "--pdb", help="PDB File", metavar="PDB", required=True)
-    parser.add_argument("-i", "--input", help="Input Double CSV File", metavar="CSV", required=True)
-    parser.add_argument("-n", "--num", help="Number of top Double ddG values to take", metavar="N", type=int, default=50)
+    parser.add_argument(
+        "-i", "--input", help="Input Double CSV File", metavar="CSV", required=True
+    )
+    parser.add_argument(
+        "-n",
+        "--num",
+        help="Number of top Double ddG values to take",
+        metavar="N",
+        type=int,
+        default=50,
+    )
     parser.add_argument("-o", "--output", help="Output CSV with the ddG", metavar="CSV")
 
     args = parser.parse_args()
@@ -173,40 +237,44 @@ def get_inputs() -> Tuple[str, str, int, Optional[str]]:
     out_csv = args.output
     total = args.num
 
-    if not os.path.isabs(pdb_file):
-        logger.info(f"Assuming current directory for {pdb_file} as root since path not specified.")
-        dir = os.getcwd()
-        file = pdb_file
+    p = Path(pdb_file)
+    if not p.is_absolute():
+        logger.info(
+            f"Assuming current directory for {pdb_file} as root since path not specified."
+        )
+        full_pdb_path = Path.cwd() / pdb_file
     else:
-        dir, file = os.path.split(os.path.abspath(pdb_file))
+        full_pdb_path = p.resolve()
 
-    full_pdb_path = os.path.join(dir, file)
+    if not full_pdb_path.is_file():
+        sys.exit(
+            "No such file found in current directory, enter full path for other directories."
+        )
 
-    if not os.path.isfile(full_pdb_path):
-        sys.exit("No such file found in current directory, enter full path for other directories.")
-
-    if not file.endswith(".pdb"):
+    if full_pdb_path.suffix != ".pdb":
         sys.exit("Given file is not a PDB file, input should be a PDB file.")
 
-    if not os.path.isabs(double_csv):
-        logger.info(f"Assuming current directory for {double_csv} as root since path not specified.")
-        dir = os.getcwd()
-        file = double_csv
+    p = Path(double_csv)
+    if not p.is_absolute():
+        logger.info(
+            f"Assuming current directory for {double_csv} as root since path not specified."
+        )
+        full_csv_path = Path.cwd() / double_csv
     else:
-        dir, file = os.path.split(os.path.abspath(double_csv))
+        full_csv_path = p.resolve()
 
-    full_csv_path = os.path.join(dir, file)
+    if not full_csv_path.is_file():
+        sys.exit(
+            "No such file found in current directory, enter full path for other directories."
+        )
 
-    if not os.path.isfile(full_csv_path):
-        sys.exit("No such file found in current directory, enter full path for other directories.")
-
-    if not full_csv_path.endswith(".csv"):
+    if full_csv_path.suffix != ".csv":
         logger.error("Given file is not a CSV file, input should be a CSV file.")
 
     if out_csv and not out_csv.endswith(".csv"):
         out_csv += ".csv"
 
-    return full_pdb_path, full_csv_path, total, out_csv
+    return str(full_pdb_path), str(full_csv_path), total, out_csv
 
 
 if __name__ == "__main__":

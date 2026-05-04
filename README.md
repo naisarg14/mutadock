@@ -4,7 +4,7 @@
 MUTADOCK is a comprehensive library designed for mutation studies and multiple receptor-ligand docking. It provides tools and methods to analyze and predict the effects of mutations on receptor-ligand interactions, enabling researchers to study protein function and drug binding affinity in a detailed manner.
 
 ### Description
-Our software is designed to facilitate protein mutation analysis and molecular docking. It integrates automated protein mutation using PyRosetta and a docking library capable of docking multiple proteins with multiple ligands. 
+Our software is designed to facilitate protein mutation analysis and molecular docking. It integrates automated protein mutation using PyRosetta and a docking library capable of docking multiple proteins with multiple ligands.
 
 ### Key Features
 #### Automated Protein Mutation:
@@ -47,7 +47,7 @@ Mutation Studies for a protein is a very fast process with just a PDB file of th
 md_mutate -i protein.pdb
 ```
 
-Other optional arguments can be changed as required, to check the usage run 
+Other optional arguments can be changed as required, to check the usage run
 ```
 md_mutate -h
 ```
@@ -73,7 +73,7 @@ Example:
 ```
 md_dock -r receptors.txt -l ligands.txt -c config.txt
 ```
-Other optional arguments can be changed as required, to check the usage run 
+Other optional arguments can be changed as required, to check the usage run
 ```
 md_dock -h
 ```

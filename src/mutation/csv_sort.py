@@ -3,7 +3,7 @@
 #                              Name: MUTADOCK                                  #
 #                           Author: Naisarg Patel                              #
 #                                                                              #
-#       Copyright (C) 2024 Naisarg Patel (https://github.com/naisarg14)        #
+#       Copyright (C) 2026 Naisarg Patel (https://github.com/naisarg14)        #
 #                                                                              #
 #          Project: https://github.com/naisarg14/mutadock                      #
 #                                                                              #
@@ -18,16 +18,17 @@
 ################################################################################
 
 
-from mutation.helpers import backup
-import sys, os
 import argparse
 import logging
+import sys
+from pathlib import Path
 from typing import Optional, Union
+
+from .helpers import backup
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,9 @@ try:
     import pandas as pd
 except ImportError:
     msg = "Error with importing pandas module for mutation using mutadock.\n"
-    msg += "Easiest way to fix this is to install pandas using the following command:\n\n"
+    msg += (
+        "Easiest way to fix this is to install pandas using the following command:\n\n"
+    )
     msg += "python -m pip install pandas\n"
     msg += "If you already have pandas installed, please check the installation.\n"
     msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
@@ -44,16 +47,26 @@ except ImportError:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="This program takes as input a CSV file and sorts it according to the coloumn given.", epilog="Written by Naisarg Patel (https://github.com/naisarg14)")
-    parser.add_argument("-i",'--input', help="CSV File to sort", metavar="CSV", required=True)
+    """CLI entry point for ``md_csv_sort``."""
+    parser = argparse.ArgumentParser(
+        description="This program takes as input a CSV file and sorts it according to the coloumn given.",
+        epilog="Written by Naisarg Patel (https://github.com/naisarg14)",
+    )
+    parser.add_argument(
+        "-i", "--input", help="CSV File to sort", metavar="CSV", required=True
+    )
     parser.add_argument("-o", "--output", help="Sorted Output CSV", metavar="CSV")
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('-a', action='store_true', help='Sort in ascending order')
-    group.add_argument('-d', action='store_true', help='Sort in descending order')
+    group.add_argument("-a", action="store_true", help="Sort in ascending order")
+    group.add_argument("-d", action="store_true", help="Sort in descending order")
 
-    parser.add_argument("-n", "--name", metavar="NAME", help="Name of the coloumn to sort")
-    parser.add_argument("-N", "--num", metavar="NUM", help="Number of the coloumn to sort")
+    parser.add_argument(
+        "-n", "--name", metavar="NAME", help="Name of the coloumn to sort"
+    )
+    parser.add_argument(
+        "-N", "--num", metavar="NUM", help="Number of the coloumn to sort"
+    )
 
     args = parser.parse_args()
     if args.d:
@@ -63,35 +76,68 @@ def main() -> None:
 
     in_file = args.input
 
-
-    if not os.path.isabs(in_file):
+    p = Path(in_file)
+    if not p.is_absolute():
         logger.info("Assuming current directory as root since path not specified.")
-        dir = os.getcwd()
-        file = in_file
+        full_csv_path = Path.cwd() / in_file
     else:
-        dir, file = os.path.split(os.path.abspath(in_file))
+        full_csv_path = p.resolve()
 
-    full_csv_path = os.path.join(dir, file)
+    if not full_csv_path.is_file():
+        sys.exit(
+            "No such file found in current directory, enter full path for other directories."
+        )
 
-    if not os.path.isfile(full_csv_path):
-        sys.exit("No such file found in current directory, enter full path for other directories.")
-
-    if not file.endswith(".csv"):
+    if full_csv_path.suffix != ".csv":
         sys.exit("Given file is not a CSV file, input should be a CSV file.")
 
-    sort_csv(in_file=full_csv_path, out_file=args.output, col_num=args.num, col_name=args.name, order=order)
+    sort_csv(
+        in_file=str(full_csv_path),
+        out_file=args.output,
+        col_num=args.num,
+        col_name=args.name,
+        order=order,
+    )
 
 
-def sort_csv(in_file: str, out_file: Optional[str] = None, col_num: Optional[Union[str, int]] = None, col_name: Optional[str] = None, order: bool = True) -> Union[str, int]:
-    in_file = in_file.removesuffix('.csv')
+def sort_csv(
+    in_file: str,
+    out_file: Optional[str] = None,
+    col_num: Optional[Union[str, int]] = None,
+    col_name: Optional[str] = None,
+    order: bool = True,
+) -> str:
+    """Sort a CSV by a chosen column and renumber the ``sr`` serial column.
+
+    The ``sr`` column is dropped and re-inserted as a sequential index after
+    sorting.  If neither *col_num* nor *col_name* is provided, the function
+    prints column names and prompts the user interactively.
+
+    Args:
+        in_file: Path to the input CSV (the ``.csv`` suffix is optional).
+        out_file: Destination path.  Defaults to ``<in_file>_sorted.csv``.
+        col_num: Zero-based column index to sort by.
+        col_name: Column header to sort by (case-insensitive; takes priority
+            over *col_num* when both are supplied).
+        order: ``True`` for ascending order (default), ``False`` for descending.
+
+    Returns:
+        Path to the written sorted CSV.
+
+    Raises:
+        FileNotFoundError: If *in_file* does not exist.
+    """
+    in_file = in_file.removesuffix(".csv")
     if not out_file:
         out_file = f"{in_file.removesuffix('.csv')}_sorted.csv"
     backup(out_file)
     try:
         df = pd.read_csv(f"{in_file}.csv")
     except FileNotFoundError:
-        logger.error("No such file found in current directory, enter full path for other directories.")
-        return 420
+        logger.error(
+            "No such file found in current directory, enter full path for other directories."
+        )
+        raise
 
     if col_name:
         header = list(df.columns.values)
@@ -102,17 +148,16 @@ def sort_csv(in_file: str, out_file: Optional[str] = None, col_num: Optional[Uni
 
     if not col_num:
         count = 0
-        for i in (df.columns.values):
+        for i in df.columns.values:
             logger.info(f"{count}: {i}")
             count += 1
         col_num = int(input("Enter the column number to sort by: "))
     df = df.sort_values(by=df.columns[col_num], ascending=True)
-    df = df.iloc[: , 1:]
-    df.insert(0, 'sr', range(1, 1 + df.shape[0]))
+    df = df.iloc[:, 1:]
+    df.insert(0, "sr", range(1, 1 + df.shape[0]))
     df.to_csv(out_file, index=False)
 
     return out_file
-
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 #                              Name: MUTADOCK                                  #
 #                           Author: Naisarg Patel                              #
 #                                                                              #
-#       Copyright (C) 2024 Naisarg Patel (https://github.com/naisarg14)        #
+#       Copyright (C) 2026 Naisarg Patel (https://github.com/naisarg14)        #
 #                                                                              #
 #          Project: https://github.com/naisarg14/mutadock                      #
 #                                                                              #
@@ -22,20 +22,20 @@ from typing import Any
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 try:
     from pyrosetta import *
-    from pyrosetta.teaching import *
-    from pyrosetta.rosetta.utility import vector1_bool
     from pyrosetta.rosetta.core.chemical import aa_from_oneletter_code
-    from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
     from pyrosetta.rosetta.core.pack.task import TaskFactory
+    from pyrosetta.rosetta.protocols.minimization_packing import PackRotamersMover
+    from pyrosetta.rosetta.utility import vector1_bool
+    from pyrosetta.teaching import *
 except ImportError:
     import sys
+
     msg = "Error with importing pyrosetta module for mutation using mutadock.\n"
     msg += "Easiest way to fix this is to install pyrosetta using the following command:\n\n"
     msg += "python -m pip install pyrosetta_installer && python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'\n"
@@ -45,9 +45,35 @@ except ImportError:
     logger.error(msg)
     sys.exit(2)
 
-def mutate_residue(pose: Any, mutant_position: int, mutant_aa: str, pack_radius: float, pack_scorefxn: Any) -> Any:
-    if pose.is_fullatom() == False:
-        IOError("mutate_residue only works with fullatom poses")
+
+def mutate_residue(
+    pose: Any,
+    mutant_position: int,
+    mutant_aa: str,
+    pack_radius: float,
+    pack_scorefxn: Any,
+) -> Any:
+    """Apply a single point mutation and repack the surrounding side-chains.
+
+    Creates a copy of *pose*, substitutes residue *mutant_position* with
+    *mutant_aa*, and runs ``PackRotamersMover`` on all residues within
+    *pack_radius* Ångströms of the mutation site.
+
+    Args:
+        pose: PyRosetta ``Pose`` object (must be full-atom).
+        mutant_position: Rosetta pose numbering of the residue to mutate.
+        mutant_aa: One-letter code of the target amino acid.
+        pack_radius: Distance threshold (Å) for side-chain repacking.
+        pack_scorefxn: PyRosetta score function used by ``PackRotamersMover``.
+
+    Returns:
+        A new ``Pose`` with the mutation applied and neighbours repacked.
+
+    Raises:
+        OSError: If *pose* is not a full-atom pose.
+    """
+    if not pose.is_fullatom():
+        raise OSError("mutate_residue only works with fullatom poses")
 
     test_pose = Pose()
     test_pose.assign(pose)
@@ -78,4 +104,6 @@ def mutate_residue(pose: Any, mutant_position: int, mutant_aa: str, pack_radius:
 
 
 if __name__ == "__main__":
-    logger.info("This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module.")
+    logger.info(
+        "This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's docking module."
+    )

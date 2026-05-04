@@ -1,4 +1,123 @@
-/myenv/
-/try/
-/dist/
-*.pyc
+# =============================================================================
+# Python
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+MANIFEST
+pip-wheel-metadata/
+dist/
+build/
+
+# =============================================================================
+# Virtual environments
+# =============================================================================
+.env
+.venv
+env/
+venv/
+ENV/
+myenv/
+
+# =============================================================================
+# Testing & coverage
+# =============================================================================
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# =============================================================================
+# Type checking & linting
+# =============================================================================
+.mypy_cache/
+.pytype/
+.ruff_cache/
+
+# =============================================================================
+# Pre-commit
+# =============================================================================
+.pre-commit-cache/
+
+# =============================================================================
+# IDEs & editors
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# =============================================================================
+# OS
+# =============================================================================
+.DS_Store
+Thumbs.db
+Thumbs.db:encryptable
+desktop.ini
+
+# =============================================================================
+# Project-specific: temporary / work directories
+# =============================================================================
+try/
+demo/
+
+# =============================================================================
+# Project-specific: generated docking outputs
+# =============================================================================
+
+# Prepared PDBQT files (generated from PDB/SDF/MOL2 inputs)
+*.pdbqt
+
+# AutoDock result files
+*.dlg
+
+# Docking output PDB files
+*_out.pdb
+
+# Per-run log files
+*_log.txt
+
+# Vina split SDF output
+*_ligand_*.sdf
+
+# Docking results aggregate
+docking_results.csv
+
+# Completed-combinations tracker (np_dock)
+*_completed.txt
+
+# Output folder created by np_dock
+out/
+
+# =============================================================================
+# Project-specific: generated mutation outputs
+# =============================================================================
+
+# Cleaned PDB files
+*_clean.pdb
+
+# Generated mutation CSV files
+*_mutations.csv
+*_mutations_all.csv
+*_ddG.csv
+*_ddG_sorted.csv
+*_double_ddg.csv
+*_double_ddg_sorted.csv
+*_triple_ddg.csv
+*_triple_ddg_sorted.csv
+
+# Mutant PDB folder (generate_mutants output)
+mutation_*/
+
+# Mutant paths text file
+*_mutants.txt
+
+# Timestamped backups created by backup()
+backups/
