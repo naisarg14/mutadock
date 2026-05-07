@@ -12,6 +12,7 @@ MANIFEST
 pip-wheel-metadata/
 dist/
 build/
+benchmark/
 
 # =============================================================================
 # Virtual environments

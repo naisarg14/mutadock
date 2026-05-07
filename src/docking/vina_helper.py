@@ -22,14 +22,24 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
-from .exceptions import (
-    ConfigError,
-    DockingError,
-    DockingRunError,
-    LigandPreparationError,
-    PDBFileError,
-    ReceptorPreparationError,
-)
+try:
+    from .exceptions import (
+        ConfigError,
+        DockingError,
+        DockingRunError,
+        LigandPreparationError,
+        PDBFileError,
+        ReceptorPreparationError,
+    )
+except ImportError:
+    from exceptions import (  # type: ignore[no-redef]
+        ConfigError,
+        DockingError,
+        DockingRunError,
+        LigandPreparationError,
+        PDBFileError,
+        ReceptorPreparationError,
+    )
 
 # Configure logging
 logging.basicConfig(
@@ -293,25 +303,31 @@ def prepare_receptor(
     receptor_filename: str,
     outputfilename: Optional[str] = None,
     ph: float = 7.4,
+    center: Optional[list[float]] = None,
+    box_size: Optional[list[float]] = None,
 ) -> None:
     """Convert a PDB or CIF receptor file to PDBQT format.
 
     Fixes the structure with PDBFixer (missing residues/atoms, nonstandard
-    residues, hydrogens at *ph*), writes a temporary PDB, then converts it
-    to PDBQT via meeko's ``mk_receptor`` CLI.  The temporary file is always
-    removed when the function exits.
+    residues, hydrogens at *ph*), then converts to PDBQT via the meeko
+    receptor API (``Polymer`` + ``PDBQTWriterLegacy.write_string_from_polymer``).
+    The intermediate fixed-PDB temp file is always removed when the function exits.
+
+    *center* and *box_size* are accepted for API compatibility but are not
+    used (GPF generation is not performed).
 
     Args:
         receptor_filename: Path to the input receptor file (``.pdb`` or ``.cif``).
         outputfilename: Destination PDBQT path.  Defaults to replacing the
             input extension with ``.pdbqt``.
         ph: pH used when adding missing hydrogens (default 7.4).
+        center: Unused — kept for API compatibility.
+        box_size: Unused — kept for API compatibility.
 
     Raises:
         ReceptorPreparationError: If preparation or conversion fails.
     """
     import os
-    import subprocess
     import sys
     import tempfile
 
@@ -326,6 +342,13 @@ def prepare_receptor(
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
         logger.error(msg)
         sys.exit(2)
+
+    from meeko import (
+        MoleculePreparation,
+        PDBQTWriterLegacy,
+        Polymer,
+        ResidueChemTemplates,
+    )
 
     if outputfilename is None:
         outputfilename = str(Path(receptor_filename).with_suffix(".pdbqt"))
@@ -345,13 +368,42 @@ def prepare_receptor(
         with open(tmp_path, "w") as f:
             PDBFile.writeFile(fixer.topology, fixer.positions, f)
 
-        result = subprocess.run(
-            ["mk_receptor", "-i", tmp_path, "-o", outputfilename],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode != 0:
-            raise RuntimeError(f"mk_receptor failed:\n{result.stderr.strip()}")
+        # meeko has no params for generic HIS — rename to HIE/HID/HIP based on
+        # which hydrogens PDBFixer placed (HE2 → HIE, HD1 → HID, both → HIP).
+        with open(tmp_path) as f:
+            pdb_lines = f.readlines()
+        his_atoms: dict[tuple, set] = {}
+        for line in pdb_lines:
+            if line.startswith(("ATOM", "HETATM")) and line[17:20] == "HIS":
+                key = (line[21], line[22:26].strip())  # (chain, resseq)
+                his_atoms.setdefault(key, set()).add(line[12:16].strip())
+        his_rename: dict[tuple, str] = {}
+        for key, atoms in his_atoms.items():
+            if "HD1" in atoms and "HE2" in atoms:
+                his_rename[key] = "HIP"
+            elif "HD1" in atoms:
+                his_rename[key] = "HID"
+            else:
+                his_rename[key] = "HIE"
+        if his_rename:
+            new_lines = []
+            for line in pdb_lines:
+                if line.startswith(("ATOM", "HETATM")) and line[17:20] == "HIS":
+                    key = (line[21], line[22:26].strip())
+                    line = line[:17] + his_rename[key] + line[20:]
+                new_lines.append(line)
+            with open(tmp_path, "w") as f:
+                f.writelines(new_lines)
+
+        chem_templates = ResidueChemTemplates.create_from_defaults()
+        mk_prep = MoleculePreparation()
+        with open(tmp_path) as f:
+            polymer = Polymer.from_pdb_string(f.read(), chem_templates, mk_prep)
+        rigid_pdbqt, _ = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+
+        with open(outputfilename, "w") as f:
+            f.write(rigid_pdbqt)
+
     except ReceptorPreparationError:
         raise
     except Exception as e:
@@ -381,17 +433,33 @@ def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
     """
     import csv
 
-    try:
-        with open(csv_file) as lc:
-            final_line = lc.readlines()[-1]
-            count = int(final_line.split(",")[0]) + 1
-    except (FileNotFoundError, ValueError):
-        count = 1
+    path = Path(csv_file)
+    file_exists = path.exists() and path.stat().st_size > 0
+
+    # Determine the next serial number from the last *data* row.
+    # This function historically wrote headerless CSVs, so we handle both:
+    #   - headerless: last line begins with an int
+    #   - with header: first line is 'sr,name,affinity'
+    count = 1
+    if file_exists:
+        try:
+            with open(csv_file) as lc:
+                lines = [ln.strip() for ln in lc.readlines() if ln.strip()]
+            if lines:
+                last = lines[-1]
+                first_field = last.split(",")[0]
+                count = int(first_field) + 1
+        except Exception:
+            count = 1
 
     name = Path(out_pdb).name.removesuffix("_out.pdb")
     try:
-        with open(csv_file, "a+", newline="") as out:
+        # If the file doesn't exist (or is empty), create it with a header.
+        mode = "a+" if file_exists else "w"
+        with open(csv_file, mode, newline="") as out:
             writer = csv.DictWriter(out, fieldnames=["sr", "name", "affinity"])
+            if not file_exists:
+                writer.writeheader()
             writer.writerow({"sr": count, "name": name, "affinity": score})
     except Exception as e:
         raise DockingError(f"Failed to write to CSV '{csv_file}': {e}") from e
@@ -444,6 +512,52 @@ def read_config(
 
     except Exception as e:
         raise ConfigError(f"Failed to read config file '{config_file}': {e}") from e
+
+
+def run_autosite(receptor_pdbqt: str) -> str:
+    """Run the AutoSite binary on a prepared receptor PDBQT file.
+
+    Creates an output directory named ``{stem}_autosite_out`` next to the
+    receptor file and runs ``autosite -r receptor.pdbqt -o out_dir``.
+    AutoSite errors if the output directory already exists — callers are
+    responsible for removing it before calling this function.
+
+    Args:
+        receptor_pdbqt: Path to the prepared receptor PDBQT file.
+
+    Returns:
+        Path to the AutoSite cluster PDB file (``{stem}_cl_001.pdb``).
+
+    Raises:
+        DockingRunError: If the autosite binary is not found, the subprocess
+            fails, or the expected cluster PDB is absent after the run.
+    """
+    import shutil
+    import subprocess
+
+    autosite_cmd = shutil.which("autosite")
+    if autosite_cmd is None:
+        raise DockingRunError("autosite binary not found on PATH.")
+
+    receptor_path = Path(receptor_pdbqt)
+    out_dir = receptor_path.parent / f"{receptor_path.stem}_autosite_out"
+
+    out_dir.mkdir(exist_ok=False)
+
+    print(receptor_pdbqt, out_dir)
+    result = subprocess.run(
+        [autosite_cmd, "-r", str(receptor_pdbqt), "-o", str(out_dir)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise DockingRunError(f"autosite failed:\n{result.stderr.strip()}")
+
+    cluster_pdb = out_dir / f"{receptor_path.stem}_cl_001.pdb"
+    if not cluster_pdb.exists():
+        raise DockingRunError(f"Expected AutoSite output not found: {cluster_pdb}")
+
+    return str(cluster_pdb)
 
 
 def dock_vina(

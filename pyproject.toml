@@ -56,6 +56,7 @@ md_ddg_triple = "mutation.ddg_calc_triple:main"
 dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
+  "pytest-mock>=3.0",
   "coverage[toml]>=7.0",
   "pre-commit>=3.0",
   "black>=24.0",

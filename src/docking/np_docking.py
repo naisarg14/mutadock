@@ -20,6 +20,7 @@
 import argparse
 import logging
 import os
+import shutil
 import sys
 import time
 from contextlib import contextmanager
@@ -41,10 +42,12 @@ try:
         add_score_to_csv,
         backup,
         calculate_geometric_center,
+        calculate_radius,
         dock_vina,
         prepare_ligand,
         prepare_receptor,
         read_config,
+        run_autosite,
         vina_split,
     )
 except ImportError:
@@ -59,10 +62,12 @@ except ImportError:
         add_score_to_csv,
         backup,
         calculate_geometric_center,
+        calculate_radius,
         dock_vina,
         prepare_ligand,
         prepare_receptor,
         read_config,
+        run_autosite,
         vina_split,
     )
 
@@ -104,11 +109,7 @@ def np_docking() -> None:
     n_poses: int = 20
     n_poses_write: int = 5
     overwrite: bool = True
-
-    if config is None and autosite is None:
-        logger.warning(
-            "Both config and autosite not provided. Assuming center as [0,0,0] and box_size as [30,30,30]."
-        )
+    use_autosite_binary: bool = False
 
     if config is not None:
         try:
@@ -121,9 +122,29 @@ def np_docking() -> None:
     if autosite is not None:
         try:
             center = list(calculate_geometric_center(autosite))
+            radius = calculate_radius(autosite)
+            box_dim = max(50.0, radius) * 2
+            box_size = [box_dim, box_dim, box_dim]
         except Exception as e:
             sys.exit(
                 f"Error while calculating the geometric center of the autosite file {autosite}\nError: {e}"
+            )
+
+    if config is None and autosite is None and center is None:
+        if shutil.which("autosite") is not None:
+            use_autosite_binary = True
+            if not quiet:
+                logger.info(
+                    "autosite binary found. Will run autosite per receptor to determine the binding site."
+                )
+        else:
+            sys.exit(
+                "Error: No config file, autosite PDB, or center coordinates provided, "
+                "and the autosite binary was not found on PATH.\n"
+                "Please provide one of:\n"
+                "  -c CONFIG     Vina configuration file with center_x/y/z\n"
+                "  -a AUTOSITE   AutoSite-generated cluster PDB file\n"
+                "  Or ensure the autosite binary is available on PATH."
             )
 
     try:
@@ -144,6 +165,9 @@ def np_docking() -> None:
         logger.info(
             f"Found {len(completed)} completed receptor-ligand combinations. {len(combinations)} combinations to be docked."
         )
+
+    # Maps prepared_receptor path -> (center, box_size) on success, None on failure.
+    autosite_cache: dict[str, Optional[tuple[list[float], list[float]]]] = {}
 
     output_dir = None
     for combination in tqdm(combinations):
@@ -171,6 +195,9 @@ def np_docking() -> None:
         backup(out_pdb)
         backup(log_file)
 
+        loop_center = center
+        loop_box_size = box_size
+
         try:
             if not quiet:
                 logger.info(f"Docking for {ligand} with {receptor}")
@@ -184,13 +211,81 @@ def np_docking() -> None:
                 try:
                     with suppress_stdout():
                         prepare_receptor(
-                            receptor_filename=receptor, outputfilename=prepared_receptor
+                            receptor_filename=receptor,
+                            outputfilename=prepared_receptor,
+                            center=center,
+                            box_size=box_size,
                         )
                 except ReceptorPreparationError as e:
                     logger.error(
                         f"Error while preparing receptor {receptor}\nError: {e}\nSkipping this receptor-ligand combination."
                     )
                     continue
+
+            if use_autosite_binary:
+                if prepared_receptor in autosite_cache:
+                    cached = autosite_cache[prepared_receptor]
+                    if cached is None:
+                        continue
+                    loop_center, loop_box_size = cached
+                else:
+                    receptor_pdbqt_path = Path(prepared_receptor)
+                    autosite_out_dir = (
+                        receptor_pdbqt_path.parent
+                        / f"{receptor_pdbqt_path.stem}_autosite_out"
+                    )
+                    cluster_pdb = (
+                        autosite_out_dir / f"{receptor_pdbqt_path.stem}_cl_001.pdb"
+                    )
+
+                    if not cluster_pdb.exists() or ignore_existing:
+                        if autosite_out_dir.exists():
+                            shutil.rmtree(autosite_out_dir)
+                        if not quiet:
+                            logger.info(f"Running autosite on {prepared_receptor}")
+                        try:
+                            cluster_pdb = Path(run_autosite(prepared_receptor))
+                        except DockingRunError as e:
+                            logger.error(
+                                f"autosite failed for {receptor}\nError: {e}\nSkipping this receptor-ligand combination."
+                            )
+                            autosite_cache[prepared_receptor] = None
+                            continue
+                    elif not quiet:
+                        logger.info(f"Reusing existing AutoSite output: {cluster_pdb}")
+
+                    try:
+                        loop_center = list(calculate_geometric_center(str(cluster_pdb)))
+                        print(f"Calculated box center: {loop_center}")
+                        radius = calculate_radius(str(cluster_pdb))
+                        box_dim = max(50.0, radius) * 2
+                        print(f"Calculated box size: {box_dim} (radius: {radius})")
+                        loop_box_size = [box_dim, box_dim, box_dim]
+                        autosite_cache[prepared_receptor] = (loop_center, loop_box_size)
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to calculate binding site from {cluster_pdb}\nError: {e}\nSkipping this receptor-ligand combination."
+                        )
+                        autosite_cache[prepared_receptor] = None
+                        continue
+
+                    config_path = (
+                        receptor_pdbqt_path.parent
+                        / f"{receptor_pdbqt_path.stem}_autosite.conf"
+                    )
+                    with open(config_path, "w") as cfg:
+                        cfg.write(f"center_x = {loop_center[0]}\n")
+                        cfg.write(f"center_y = {loop_center[1]}\n")
+                        cfg.write(f"center_z = {loop_center[2]}\n")
+                        cfg.write(f"size_x = {loop_box_size[0]}\n")
+                        cfg.write(f"size_y = {loop_box_size[1]}\n")
+                        cfg.write(f"size_z = {loop_box_size[2]}\n")
+                        cfg.write(f"exhaustiveness = {exhaustiveness}\n")
+                        cfg.write(f"n_poses = {n_poses}\n")
+                        cfg.write(f"n_poses_write = {n_poses_write}\n")
+                        cfg.write(f"overwrite = {overwrite}\n")
+                    if not quiet:
+                        logger.info(f"Wrote AutoSite config: {config_path}")
 
             if not Path(prepared_ligand).exists() or ignore_existing:
                 if not quiet:
@@ -213,8 +308,8 @@ def np_docking() -> None:
                         prepared_ligand,
                         out_pdb,
                         log_file,
-                        center=center,
-                        box_size=box_size,
+                        center=loop_center,
+                        box_size=loop_box_size,
                         exhaustiveness=exhaustiveness,
                         n_poses=n_poses,
                         n_poses_write=n_poses_write,

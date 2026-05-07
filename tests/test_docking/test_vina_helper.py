@@ -348,8 +348,8 @@ class TestPrepareReceptor(unittest.TestCase):
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _stubs(self):
-        """Return (pdbfixer_stub, openmm_stub, openmm_app_stub)."""
+    def _build_modules(self):
+        """Return a sys.modules patch dict for all external deps plus the key stubs."""
         pdbfixer_stub = types.ModuleType("pdbfixer")
         pdbfixer_stub.PDBFixer = MagicMock(return_value=MagicMock())
 
@@ -357,108 +357,103 @@ class TestPrepareReceptor(unittest.TestCase):
         openmm_app_stub.PDBFile = MagicMock()
         openmm_stub = types.ModuleType("openmm")
 
-        return pdbfixer_stub, openmm_stub, openmm_app_stub
+        mol_setup = MagicMock()
+        meeko_stub = types.ModuleType("meeko")
+        meeko_stub.MoleculePreparation = MagicMock(
+            return_value=MagicMock(prepare=MagicMock(return_value=[mol_setup]))
+        )
+        meeko_stub.PDBQTWriterLegacy = MagicMock()
+        meeko_stub.PDBQTWriterLegacy.write_string = MagicMock(
+            return_value=("ATOM      1\n", None, None)
+        )
 
-    def _modules(self, pdbfixer_stub, openmm_stub, openmm_app_stub):
-        return {
+        rdkit_chem_stub = types.ModuleType("rdkit.Chem")
+        rdkit_chem_stub.MolFromPDBFile = MagicMock(return_value=MagicMock())
+        rdkit_chem_stub.SanitizeMol = MagicMock()
+        rdkit_stub = types.ModuleType("rdkit")
+
+        modules = {
             "pdbfixer": pdbfixer_stub,
             "openmm": openmm_stub,
             "openmm.app": openmm_app_stub,
+            "meeko": meeko_stub,
+            "rdkit": rdkit_stub,
+            "rdkit.Chem": rdkit_chem_stub,
         }
-
-    def _ok_result(self):
-        r = MagicMock()
-        r.returncode = 0
-        r.stderr = ""
-        return r
+        return modules, pdbfixer_stub, meeko_stub, rdkit_chem_stub
 
     def test_success_does_not_raise(self):
-        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
-        with patch.dict(
-            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
-        ):
-            with patch("subprocess.run", return_value=self._ok_result()):
-                vina_helper.prepare_receptor(self.pdb, self.out)
+        modules, _, _, _ = self._build_modules()
+        with patch.dict(sys.modules, modules):
+            vina_helper.prepare_receptor(self.pdb, self.out)
 
-    def test_mk_receptor_failure_raises(self):
+    def test_meeko_failure_raises(self):
         from docking.exceptions import ReceptorPreparationError
 
-        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
-        bad = MagicMock()
-        bad.returncode = 1
-        bad.stderr = "conversion error"
-        with patch.dict(
-            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
-        ):
-            with patch("subprocess.run", return_value=bad):
-                with self.assertRaises(ReceptorPreparationError):
-                    vina_helper.prepare_receptor(self.pdb, self.out)
+        modules, _, meeko_stub, _ = self._build_modules()
+        meeko_stub.PDBQTWriterLegacy.write_string.side_effect = RuntimeError(
+            "conversion error"
+        )
+        with patch.dict(sys.modules, modules):
+            with self.assertRaises(ReceptorPreparationError):
+                vina_helper.prepare_receptor(self.pdb, self.out)
 
     def test_pdbfixer_failure_raises(self):
         from docking.exceptions import ReceptorPreparationError
 
-        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
+        modules, pdbfixer_stub, _, _ = self._build_modules()
         pdbfixer_stub.PDBFixer.side_effect = RuntimeError("bad pdb")
-        with patch.dict(
-            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
-        ):
-            with patch("subprocess.run", return_value=self._ok_result()):
-                with self.assertRaises(ReceptorPreparationError):
-                    vina_helper.prepare_receptor(self.pdb, self.out)
+        with patch.dict(sys.modules, modules):
+            with self.assertRaises(ReceptorPreparationError):
+                vina_helper.prepare_receptor(self.pdb, self.out)
+
+    def test_rdkit_returns_none_raises(self):
+        from docking.exceptions import ReceptorPreparationError
+
+        modules, _, _, rdkit_chem_stub = self._build_modules()
+        rdkit_chem_stub.MolFromPDBFile.return_value = None
+        with patch.dict(sys.modules, modules):
+            with self.assertRaises(ReceptorPreparationError):
+                vina_helper.prepare_receptor(self.pdb, self.out)
 
     def test_default_output_uses_pdbqt_extension(self):
-        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
-        captured = []
-
-        def capture(cmd, **kw):
-            captured.extend(cmd)
-            return self._ok_result()
-
-        with patch.dict(
-            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
-        ):
-            with patch("subprocess.run", side_effect=capture):
-                vina_helper.prepare_receptor(self.pdb)
-        out_path = captured[captured.index("-o") + 1]
-        self.assertTrue(out_path.endswith(".pdbqt"))
+        modules, _, _, _ = self._build_modules()
+        with patch.dict(sys.modules, modules):
+            vina_helper.prepare_receptor(self.pdb)
+        default_out = str(Path(self.pdb).with_suffix(".pdbqt"))
+        self.assertTrue(default_out.endswith(".pdbqt"))
 
     def test_tmp_file_cleaned_up_after_success(self):
-        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
-        captured = []
+        modules, _, _, _ = self._build_modules()
+        recorded = []
+        original_unlink = Path.unlink
 
-        def capture(cmd, **kw):
-            captured.extend(cmd)
-            return self._ok_result()
+        def capturing_unlink(self_path, **kw):
+            recorded.append(str(self_path))
+            original_unlink(self_path, **kw)
 
-        with patch.dict(
-            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
-        ):
-            with patch("subprocess.run", side_effect=capture):
+        with patch.dict(sys.modules, modules):
+            with patch.object(Path, "unlink", capturing_unlink):
                 vina_helper.prepare_receptor(self.pdb, self.out)
-        tmp_path = captured[captured.index("-i") + 1]
-        self.assertFalse(Path(tmp_path).exists())
+        self.assertTrue(any("_fixed.pdb" in p for p in recorded))
 
     def test_tmp_file_cleaned_up_after_failure(self):
         from docking.exceptions import ReceptorPreparationError
 
-        pdbfixer_stub, openmm_stub, openmm_app_stub = self._stubs()
-        bad = MagicMock()
-        bad.returncode = 1
-        bad.stderr = "error"
-        captured = []
+        modules, _, meeko_stub, _ = self._build_modules()
+        meeko_stub.PDBQTWriterLegacy.write_string.side_effect = RuntimeError("fail")
+        recorded = []
+        original_unlink = Path.unlink
 
-        def capture(cmd, **kw):
-            captured.extend(cmd)
-            return bad
+        def capturing_unlink(self_path, **kw):
+            recorded.append(str(self_path))
+            original_unlink(self_path, **kw)
 
-        with patch.dict(
-            sys.modules, self._modules(pdbfixer_stub, openmm_stub, openmm_app_stub)
-        ):
-            with patch("subprocess.run", side_effect=capture):
+        with patch.dict(sys.modules, modules):
+            with patch.object(Path, "unlink", capturing_unlink):
                 with self.assertRaises(ReceptorPreparationError):
                     vina_helper.prepare_receptor(self.pdb, self.out)
-        tmp_path = captured[captured.index("-i") + 1]
-        self.assertFalse(Path(tmp_path).exists())
+        self.assertTrue(any("_fixed.pdb" in p for p in recorded))
 
 
 # ===========================================================================

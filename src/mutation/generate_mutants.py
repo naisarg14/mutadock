@@ -96,12 +96,15 @@ def generate_single_mutation(
     Returns:
         Path to the output folder containing the mutant PDB files.
     """
-    if int(total) == 0:
-        idk = 0
+    # total == 0 means "generate all" (do not stop early)
+    max_to_generate: Optional[int]
+    if int(total) <= 0:
+        max_to_generate = None
     else:
-        idk = 1
+        max_to_generate = int(total)
+
     init("-mute all")
-    count = 1
+    count = 0
     out_folder: str = ""
     with open(csv_file) as csvfile:
         reader = csv.DictReader(csvfile)
@@ -132,9 +135,10 @@ def generate_single_mutation(
             if text_file:
                 with open(text_file, "a+") as file:
                     file.write(f"{out_file}\n")
-            if count >= total:
+
+            count += 1
+            if max_to_generate is not None and count >= max_to_generate:
                 break
-            count += idk
     return out_folder
 
 
@@ -164,12 +168,15 @@ def generate_double_mutation(
     Returns:
         Path to the output folder containing the mutant PDB files.
     """
-    if int(total) == 0:
-        idk = 0
+    # total == 0 means "generate all" (do not stop early)
+    max_to_generate: Optional[int]
+    if int(total) <= 0:
+        max_to_generate = None
     else:
-        idk = 1
+        max_to_generate = int(total)
+
     init("-mute all")
-    count = 1
+    count = 0
     out_folder: str = ""
     with open(csv_file) as csvfile:
         reader = csv.DictReader(csvfile)
@@ -207,9 +214,9 @@ def generate_double_mutation(
                 with open(text_file, "a+") as file:
                     file.write(f"{out_file}\n")
 
-            if count >= total:
+            count += 1
+            if max_to_generate is not None and count >= max_to_generate:
                 break
-            count += idk
     return out_folder
 
 
@@ -239,12 +246,15 @@ def generate_triple_mutation(
     Returns:
         Path to the output folder containing the mutant PDB files.
     """
-    if int(total) == -1:
-        idk = 0
+    # total == -1 means "generate all" (do not stop early)
+    max_to_generate: Optional[int]
+    if int(total) < 0:
+        max_to_generate = None
     else:
-        idk = 1
+        max_to_generate = int(total)
+
     init("-mute all")
-    count = 1
+    count = 0
     out_folder: str = ""
     with open(csv_file) as csvfile:
         reader = csv.DictReader(csvfile)
@@ -290,9 +300,9 @@ def generate_triple_mutation(
                 with open(text_file, "a+") as file:
                     file.write(f"{out_file}\n")
 
-            if count >= total:
+            count += 1
+            if max_to_generate is not None and count >= max_to_generate:
                 break
-            count += idk
     return out_folder
 
 

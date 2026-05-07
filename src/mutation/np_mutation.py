@@ -97,8 +97,8 @@ def np_mutation() -> None:
 
     # Clean the PDB file
     if not quiet:
-        logger.info(f"Cleaning the PDB file {full_pdb_path}")
-    cleaned_pdb = f"{full_pdb_path.removesuffix('.pdb')}_clean.pdb"
+        logger.info(f"Cleaning the input file {full_pdb_path}")
+    cleaned_pdb = f"{Path(full_pdb_path).with_suffix('')}_clean.pdb"
     with suppress_stdout():
         clean_pdb(full_pdb_path, cleaned_pdb)
     if not quiet:
@@ -388,8 +388,10 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
             "No such file found in current directory, enter full path for other directories."
         )
 
-    if full_pdb_path.suffix != ".pdb":
-        sys.exit("Given file is not a PDB file, input should be a PDB file.")
+    if full_pdb_path.suffix not in (".pdb", ".cif"):
+        sys.exit(
+            "Given file is not a PDB/CIF file, input should be a .pdb or .cif file."
+        )
 
     return (
         str(full_pdb_path),
