@@ -179,6 +179,11 @@ def np_docking() -> None:
             prepared_ligand = f"{ligand.removesuffix('.sdf')}.pdbqt"
         elif ligand.endswith(".mol2"):
             prepared_ligand = f"{ligand.removesuffix('.mol2')}.pdbqt"
+        elif ligand.endswith(".pdbqt"):
+            prepared_ligand = ligand
+        else:
+            logger.error(f"Unsupported ligand format for {ligand}, skipping.")
+            continue
 
         if not quiet:
             logger.info(f"Docking the receptor {receptor} to the ligand {ligand}")

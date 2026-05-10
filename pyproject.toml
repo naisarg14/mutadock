@@ -39,7 +39,7 @@ classifiers = [
 ]
 
 [tool.hatch.build.targets.wheel]
-sources = ["src"]
+packages = ["src/mutation", "src/docking"]
 
 [project.scripts]
 md_mutate = "mutation.np_mutation:naisarg"

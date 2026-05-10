@@ -13,6 +13,7 @@ pip-wheel-metadata/
 dist/
 build/
 benchmark/
+benchmark2/
 
 # =============================================================================
 # Virtual environments
