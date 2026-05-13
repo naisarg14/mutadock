@@ -79,15 +79,15 @@ def vina_dock(
         logger.error(msg)
         sys.exit(2)
 
-    if not Path(receptor).exists():
-        raise DockingRunError(f"Receptor file not found: {receptor}")
-    if not Path(ligand).exists():
-        raise DockingRunError(f"Ligand file not found: {ligand}")
-
     if center is None:
         center = [0, 0, 0]
     if box_size is None:
         box_size = [30, 30, 30]
+
+    if not Path(receptor).exists():
+        raise DockingRunError(f"Receptor file not found: {receptor}")
+    if not Path(ligand).exists():
+        raise DockingRunError(f"Ligand file not found: {ligand}")
 
     try:
         logger.info("Docking using mutadock library by Naisarg Patel (@naisarg14)")
@@ -98,7 +98,6 @@ def vina_dock(
         logger.info(str(v))
 
         v.compute_vina_maps(center=center, box_size=box_size)
-        v.optimize()
         v.dock(exhaustiveness=exhaustiveness, n_poses=n_poses)
         v.write_poses(output, n_poses=n_poses_write, overwrite=overwrite)
 

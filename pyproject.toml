@@ -42,8 +42,8 @@ classifiers = [
 packages = ["src/mutation", "src/docking"]
 
 [project.scripts]
-md_mutate = "mutation.np_mutation:naisarg"
-md_dock = "docking.np_docking:naisarg"
+md_mutate = "mutation.np_mutation:np_mutation"
+md_dock = "docking.np_docking:np_docking"
 md_vina_dock = "docking.vina_dock:main"
 md_csv_generator = "mutation.csv_generator:main"
 md_csv_sort = "mutation.csv_sort:main"

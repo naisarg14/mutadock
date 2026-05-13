@@ -300,118 +300,68 @@ def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> str:
 
 
 def prepare_receptor(
-    receptor_filename: str,
-    outputfilename: Optional[str] = None,
-    ph: float = 7.4,
-    center: Optional[list[float]] = None,
-    box_size: Optional[list[float]] = None,
+    input_pdb: str,
+    output_pdbqt: Optional[str] = None,
 ) -> None:
-    """Convert a PDB or CIF receptor file to PDBQT format.
+    """Prepare a receptor PDB file for docking using pdbfixer, RDKit, and meeko.
 
-    Fixes the structure with PDBFixer (missing residues/atoms, nonstandard
-    residues, hydrogens at *ph*), then converts to PDBQT via the meeko
-    receptor API (``Polymer`` + ``PDBQTWriterLegacy.write_string_from_polymer``).
-    The intermediate fixed-PDB temp file is always removed when the function exits.
-
-    *center* and *box_size* are accepted for API compatibility but are not
-    used (GPF generation is not performed).
+    Fixes missing residues/atoms with PDBFixer, loads the result with RDKit,
+    and converts to PDBQT with meeko.  A temporary ``_fixed.pdb`` file is
+    created and removed regardless of success or failure.
 
     Args:
-        receptor_filename: Path to the input receptor file (``.pdb`` or ``.cif``).
-        outputfilename: Destination PDBQT path.  Defaults to replacing the
-            input extension with ``.pdbqt``.
-        ph: pH used when adding missing hydrogens (default 7.4).
-        center: Unused — kept for API compatibility.
-        box_size: Unused — kept for API compatibility.
+        input_pdb: Path to the input PDB file.
+        output_pdbqt: Destination PDBQT path.  Defaults to *input_pdb* with
+            the extension replaced by ``.pdbqt``.
 
     Raises:
-        ReceptorPreparationError: If preparation or conversion fails.
+        ReceptorPreparationError: If any preparation step fails.
     """
-    import os
-    import sys
-    import tempfile
-
     try:
+        from meeko import MoleculePreparation, PDBQTWriterLegacy
         from openmm.app import PDBFile
         from pdbfixer import PDBFixer
-    except ModuleNotFoundError:
-        msg = "Error with importing modules for preparing receptor files for Docking.\n"
-        msg += "Install pdbfixer and openmm:\n\n"
-        msg += "  conda install -c conda-forge pdbfixer openmm\n"
-        msg += "  or: python -m pip install pdbfixer openmm\n"
-        msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-        logger.error(msg)
-        sys.exit(2)
+        from rdkit.Chem import MolFromPDBFile, SanitizeMol
+    except ModuleNotFoundError as e:
+        raise ReceptorPreparationError(f"Missing required module: {e}") from e
 
-    from meeko import (
-        MoleculePreparation,
-        PDBQTWriterLegacy,
-        Polymer,
-        ResidueChemTemplates,
-    )
+    if output_pdbqt is None:
+        output_pdbqt = str(Path(input_pdb).with_suffix(".pdbqt"))
 
-    if outputfilename is None:
-        outputfilename = str(Path(receptor_filename).with_suffix(".pdbqt"))
+    input_path = Path(input_pdb)
+    tmp_pdb = str(input_path.parent / f"{input_path.stem}_fixed.pdb")
 
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix="_fixed.pdb")
-    os.close(tmp_fd)
     try:
-        fixer = PDBFixer(filename=receptor_filename)
+        fixer = PDBFixer(filename=input_pdb)
         fixer.findMissingResidues()
-        fixer.findNonstandardResidues()
-        fixer.replaceNonstandardResidues()
-        fixer.removeHeterogens(keepWater=False)
         fixer.findMissingAtoms()
         fixer.addMissingAtoms()
-        fixer.addMissingHydrogens(ph)
+        fixer.addMissingHydrogens(7.0)
 
-        with open(tmp_path, "w") as f:
+        with open(tmp_pdb, "w") as f:
             PDBFile.writeFile(fixer.topology, fixer.positions, f)
 
-        # meeko has no params for generic HIS — rename to HIE/HID/HIP based on
-        # which hydrogens PDBFixer placed (HE2 → HIE, HD1 → HID, both → HIP).
-        with open(tmp_path) as f:
-            pdb_lines = f.readlines()
-        his_atoms: dict[tuple, set] = {}
-        for line in pdb_lines:
-            if line.startswith(("ATOM", "HETATM")) and line[17:20] == "HIS":
-                key = (line[21], line[22:26].strip())  # (chain, resseq)
-                his_atoms.setdefault(key, set()).add(line[12:16].strip())
-        his_rename: dict[tuple, str] = {}
-        for key, atoms in his_atoms.items():
-            if "HD1" in atoms and "HE2" in atoms:
-                his_rename[key] = "HIP"
-            elif "HD1" in atoms:
-                his_rename[key] = "HID"
-            else:
-                his_rename[key] = "HIE"
-        if his_rename:
-            new_lines = []
-            for line in pdb_lines:
-                if line.startswith(("ATOM", "HETATM")) and line[17:20] == "HIS":
-                    key = (line[21], line[22:26].strip())
-                    line = line[:17] + his_rename[key] + line[20:]
-                new_lines.append(line)
-            with open(tmp_path, "w") as f:
-                f.writelines(new_lines)
+        mol = MolFromPDBFile(tmp_pdb, sanitize=False)
+        if mol is None:
+            raise ValueError("RDKit could not load the fixed PDB as a molecule")
+        SanitizeMol(mol)
 
-        chem_templates = ResidueChemTemplates.create_from_defaults()
-        mk_prep = MoleculePreparation()
-        with open(tmp_path) as f:
-            polymer = Polymer.from_pdb_string(f.read(), chem_templates, mk_prep)
-        rigid_pdbqt, _ = PDBQTWriterLegacy.write_string_from_polymer(polymer)
+        mp = MoleculePreparation()
+        mol_setups = mp.prepare(mol)
+        pdbqt_string, _, _ = PDBQTWriterLegacy.write_string(mol_setups[0])
 
-        with open(outputfilename, "w") as f:
-            f.write(rigid_pdbqt)
+        with open(output_pdbqt, "w") as f:
+            f.write(pdbqt_string)
 
     except ReceptorPreparationError:
         raise
     except Exception as e:
         raise ReceptorPreparationError(
-            f"Failed to prepare receptor '{receptor_filename}': {e}"
+            f"Failed to prepare receptor '{input_pdb}': {e}"
         ) from e
     finally:
-        Path(tmp_path).unlink(missing_ok=True)
+        if Path(tmp_pdb).exists():
+            Path(tmp_pdb).unlink()
 
 
 def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
@@ -436,10 +386,6 @@ def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
     path = Path(csv_file)
     file_exists = path.exists() and path.stat().st_size > 0
 
-    # Determine the next serial number from the last *data* row.
-    # This function historically wrote headerless CSVs, so we handle both:
-    #   - headerless: last line begins with an int
-    #   - with header: first line is 'sr,name,affinity'
     count = 1
     if file_exists:
         try:
@@ -454,13 +400,9 @@ def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
 
     name = Path(out_pdb).name.removesuffix("_out.pdb")
     try:
-        # If the file doesn't exist (or is empty), create it with a header.
-        mode = "a+" if file_exists else "w"
-        with open(csv_file, mode, newline="") as out:
-            writer = csv.DictWriter(out, fieldnames=["sr", "name", "affinity"])
-            if not file_exists:
-                writer.writeheader()
-            writer.writerow({"sr": count, "name": name, "affinity": score})
+        with open(csv_file, "a", newline="") as out:
+            writer = csv.writer(out)
+            writer.writerow([count, name, score])
     except Exception as e:
         raise DockingError(f"Failed to write to CSV '{csv_file}': {e}") from e
 
@@ -544,11 +486,11 @@ def run_autosite(receptor_pdbqt: str) -> str:
 
     out_dir.mkdir(exist_ok=False)
 
-    print(receptor_pdbqt, out_dir)
     result = subprocess.run(
-        [autosite_cmd, "-r", str(receptor_pdbqt), "-o", str(out_dir)],
+        [autosite_cmd, "-r", receptor_path.name, "-o", out_dir.name],
         capture_output=True,
         text=True,
+        cwd=str(receptor_path.parent),
     )
     if result.returncode != 0:
         raise DockingRunError(f"autosite failed:\n{result.stderr.strip()}")

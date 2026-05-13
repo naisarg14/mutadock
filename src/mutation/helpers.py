@@ -316,6 +316,103 @@ def resolve_matrix(
     return load_matrix(path)
 
 
+_rosetta_init_done: bool = False
+
+
+def mutate_and_score(
+    pdb_file: str,
+    chain: str,
+    aa_number: int,
+    orig_aa: str,
+    mutated_aa: str,
+    output_file: str,
+) -> tuple[float, float, float]:
+    """Apply a single-point mutation, score both WT and mutant, and write the mutant PDB.
+
+    Initialises PyRosetta once per process (subsequent calls reuse the existing
+    session), loads *pdb_file* as a full-atom pose, scores the wild-type, applies
+    the substitution at (*chain*, *aa_number*) with an 8 Å repacking radius, scores
+    the mutant, and dumps the mutant coordinates to *output_file*.
+
+    Args:
+        pdb_file: Path to the cleaned wild-type PDB (ATOM records only).
+        chain: PDB chain identifier, e.g. ``"A"``.
+        aa_number: Residue sequence number to mutate.
+        orig_aa: Wild-type amino acid (1-letter code; used for logging only).
+        mutated_aa: Target amino acid (1- or 3-letter code).
+        output_file: Destination path for the mutant PDB file.
+            Parent directories are created if absent.
+
+    Returns:
+        ``(wt_score, mut_score, ddG)`` where ``ddG = mut_score - wt_score``
+        in Rosetta energy units.
+
+    Raises:
+        MutationError: If PyRosetta is unavailable, the residue is not found
+            in the pose, or the amino-acid code cannot be resolved.
+    """
+    global _rosetta_init_done
+    import os
+    import sys as _sys
+
+    try:
+        _sys.stdout = open(os.devnull, "w")
+        from pyrosetta import get_fa_scorefxn, init, pose_from_pdb  # noqa: F401
+
+        _sys.stdout = _sys.__stdout__
+    except ImportError as err:
+        _sys.stdout = _sys.__stdout__
+        raise MutationError(
+            "PyRosetta not found. Install it with:\n"
+            "  python -m pip install pyrosetta_installer && "
+            "python3 -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'"
+        ) from err
+
+    from . import predict_ddG  # local import avoids circular dependency at module load
+
+    if not _rosetta_init_done:
+        _sys.stdout = open(os.devnull, "w")
+        init("-mute all")
+        _sys.stdout = _sys.__stdout__
+        _rosetta_init_done = True
+
+    pdb_path = Path(pdb_file).resolve()
+    with in_directory(pdb_path.parent):
+        pose = pose_from_pdb(pdb_path.name)
+
+    sfxn = get_fa_scorefxn()
+    wt_score: float = sfxn.score(pose)
+
+    pose_position: int = pose.pdb_info().pdb2pose(chain, aa_number)
+    if pose_position == 0:
+        raise MutationError(f"Residue {chain}{aa_number} not found in '{pdb_file}'.")
+
+    mut_1: Optional[str] = get_1(mutated_aa) if check_3(mutated_aa) else mutated_aa
+    if mut_1 is None:
+        raise MutationError(f"Unknown amino acid code: '{mutated_aa}'")
+
+    mut_pose = predict_ddG.mutate_residue(pose, pose_position, mut_1, 8.0, sfxn)
+    mut_score: float = sfxn.score(mut_pose)
+    ddg: float = mut_score - wt_score
+
+    out_path = Path(output_file)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    mut_pose.dump_pdb(str(out_path))
+
+    logger.info(
+        "%s chain=%s pos=%d %s->%s | WT=%.3f Mut=%.3f ddG=%.3f",
+        pdb_path.name,
+        chain,
+        aa_number,
+        orig_aa,
+        mut_1,
+        wt_score,
+        mut_score,
+        ddg,
+    )
+    return (wt_score, mut_score, ddg)
+
+
 if __name__ == "__main__":
     logger.info(
         "This is a dependency file for mutadock (https://github.com/naisarg14/mutadock) library's mutation module."
