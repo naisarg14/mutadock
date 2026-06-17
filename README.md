@@ -129,6 +129,48 @@ md_mutate -h   # all options
 | 8 | `protein_modified_triple_ddg_sorted.csv` | File 7 sorted |
 | 9 | `protein_modified_mutants.txt` | List of mutated PDB paths (direct input for `md_dock`) |
 
+### Generating Mutant PDB Files
+
+Use `md_generate_pdb` to apply one or more specific mutations to a PDB and write the mutant structure(s) directly — no ΔΔG scoring required.
+
+**Single mutation on the command line:**
+
+```bash
+md_generate_pdb -i protein.pdb -m A:386:ASN:ALA
+# omit the wild-type AA if unknown:
+md_generate_pdb -i protein.pdb -m A:386:ALA
+```
+
+**From a CSV file (one independent PDB per row):**
+
+```bash
+md_generate_pdb -i protein.pdb -c mutations.csv
+```
+
+CSV format:
+
+```
+chain,position,wtAA,prAA
+A,386,ASN,ALA
+B,45,GLY,VAL
+```
+
+`wtAA` is optional (used for output file naming). Column names are case-insensitive and common aliases (`old_aa`, `new_aa`, `from`, `to`) are accepted.
+
+**Compound mutant** (all CSV mutations applied to a single pose):
+
+```bash
+md_generate_pdb -i protein.pdb -c mutations.csv --compound
+```
+
+**Custom output folder:**
+
+```bash
+md_generate_pdb -i protein.pdb -c mutations.csv -o ./mutants/
+```
+
+Output files are named `{stem}_{WTAA}-{CHAIN}{POS}-{NEWAA}.pdb` (e.g. `protein_ASN-A386-A.pdb`).
+
 ### Docking Studies
 
 ```bash
@@ -162,6 +204,7 @@ Every receptor in `receptors.txt` is docked against every ligand in `ligands.txt
 | `md_ddg_single` | Calculate single-mutation ΔΔG from a mutations CSV |
 | `md_ddg_double` | Calculate double-mutation ΔΔG combinations |
 | `md_ddg_triple` | Calculate triple-mutation ΔΔG combinations |
+| `md_generate_pdb` | Generate mutant PDB file(s) from a single mutation or a CSV list |
 
 
 ## Python API
@@ -180,6 +223,22 @@ generate_csv("data/4QJR.cif", matrix="BLOSUM62")
 # Load a matrix directly
 score_dict = load_matrix("data/PAM250")   # dict[str, dict[str, int]], 3-letter keys
 score_dict = resolve_matrix("PAM30")      # downloads PAM30 from NCBI if needed
+
+# --- Generate mutant PDB ---
+from mutation.generate_mutant_pdb import generate_pdb
+
+# Single mutation
+outputs = generate_pdb("protein.pdb", [{"chain": "A", "position": 386, "wtAA": "ASN", "prAA": "ALA"}])
+
+# Multiple independent mutants from a list
+mutations = [
+    {"chain": "A", "position": 386, "wtAA": "ASN", "prAA": "ALA"},
+    {"chain": "B", "position": 45,  "wtAA": "GLY", "prAA": "VAL"},
+]
+outputs = generate_pdb("protein.pdb", mutations, output_folder="./mutants/")
+
+# One compound mutant (all mutations on the same pose)
+outputs = generate_pdb("protein.pdb", mutations, output_folder="./mutants/", compound=True)
 
 # --- Docking ---
 from docking.vina_helper import prepare_receptor, prepare_ligand, dock_vina

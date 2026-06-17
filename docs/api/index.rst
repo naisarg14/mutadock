@@ -23,5 +23,6 @@ API Reference
    mutation.ddg_calc_double
    mutation.ddg_calc_triple
    mutation.generate_mutants
+   mutation.generate_mutant_pdb
    mutation.predict_ddG
    mutation.np_mutation

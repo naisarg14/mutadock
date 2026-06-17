@@ -50,6 +50,7 @@ md_csv_sort = "mutation.csv_sort:main"
 md_ddg_single = "mutation.ddg_calc:main"
 md_ddg_double = "mutation.ddg_calc_double:main"
 md_ddg_triple = "mutation.ddg_calc_triple:main"
+md_generate_pdb = "mutation.generate_mutant_pdb:main"
 
 
 [project.optional-dependencies]
@@ -161,6 +162,7 @@ ignore = [
 "src/mutation/ddg_calc_double.py" = ["F403", "F405"]
 "src/mutation/ddg_calc_triple.py" = ["F403", "F405"]
 "src/mutation/generate_mutants.py" = ["F403", "F405"]
+"src/mutation/generate_mutant_pdb.py" = ["F403", "F405"]
 "src/mutation/predict_ddG.py"     = ["F403", "F405"]
 # test files use wildcard fixture injection and broad mocks
 "tests/**/test_*.py"              = ["F811"]
