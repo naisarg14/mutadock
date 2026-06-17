@@ -216,10 +216,8 @@ def np_docking() -> None:
                 try:
                     with suppress_stdout():
                         prepare_receptor(
-                            receptor_filename=receptor,
-                            outputfilename=prepared_receptor,
-                            center=center,
-                            box_size=box_size,
+                            input_pdb=receptor,
+                            output_pdbqt=prepared_receptor,
                         )
                 except ReceptorPreparationError as e:
                     logger.error(

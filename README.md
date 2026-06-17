@@ -211,8 +211,8 @@ Every receptor in `receptors.txt` is docked against every ligand in `ligands.txt
 
 ```python
 # --- Mutation ---
-from mutation.csv_generator import generate_csv
-from mutation.helpers import resolve_matrix, load_matrix
+from mutadock.mutation.csv_generator import generate_csv
+from mutadock.mutation.helpers import resolve_matrix, load_matrix
 
 # Generate mutation CSV with default matrix (PAM250)
 generate_csv("data/4QJR.cif")
@@ -225,7 +225,7 @@ score_dict = load_matrix("data/PAM250")   # dict[str, dict[str, int]], 3-letter 
 score_dict = resolve_matrix("PAM30")      # downloads PAM30 from NCBI if needed
 
 # --- Generate mutant PDB ---
-from mutation.generate_mutant_pdb import generate_pdb
+from mutadock.mutation.generate_mutant_pdb import generate_pdb
 
 # Single mutation
 outputs = generate_pdb("protein.pdb", [{"chain": "A", "position": 386, "wtAA": "ASN", "prAA": "ALA"}])
@@ -241,7 +241,7 @@ outputs = generate_pdb("protein.pdb", mutations, output_folder="./mutants/")
 outputs = generate_pdb("protein.pdb", mutations, output_folder="./mutants/", compound=True)
 
 # --- Docking ---
-from docking.vina_helper import prepare_receptor, prepare_ligand, dock_vina
+from mutadock.docking.vina_helper import prepare_receptor, prepare_ligand, dock_vina
 
 prepare_receptor("data/4QJR.cif", "receptor.pdbqt")        # PDB or CIF
 prepare_ligand("data/Ligand.sdf", "ligand.pdbqt")

@@ -1,5 +1,5 @@
 """
-Tests for mutation.ddg_calc
+Tests for mutadock.mutation.ddg_calc
 -----------------------------
 PyRosetta, tqdm, and the predict_ddG sub-module are mocked before import.
 
@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 # Bio / PyRosetta / tqdm stubs are already injected by conftest.py before
 # this module is imported.
 # ---------------------------------------------------------------------------
-from mutation import ddg_calc
+from mutadock.mutation import ddg_calc
 
 # ---------------------------------------------------------------------------
 # CSV fixture helpers
@@ -88,11 +88,11 @@ def _patch_calc_ddg(wt_score: float = 10.0, mut_score: float = 7.5):
     mock_get_fa = MagicMock(name="get_fa_scorefxn", return_value=mock_sfxn)
 
     with (
-        patch("mutation.ddg_calc.init"),
-        patch("mutation.ddg_calc.pose_from_pdb", return_value=mock_pose),
-        patch("mutation.ddg_calc.get_fa_scorefxn", mock_get_fa),
-        patch("mutation.ddg_calc.backup"),
-        patch("mutation.ddg_calc.in_directory"),
+        patch("mutadock.mutation.ddg_calc.init"),
+        patch("mutadock.mutation.ddg_calc.pose_from_pdb", return_value=mock_pose),
+        patch("mutadock.mutation.ddg_calc.get_fa_scorefxn", mock_get_fa),
+        patch("mutadock.mutation.ddg_calc.backup"),
+        patch("mutadock.mutation.ddg_calc.in_directory"),
     ):
         yield {
             "pose": mock_pose,
@@ -285,7 +285,7 @@ class TestCalcDdg(unittest.TestCase):
                     "mutate_residue",
                     return_value=mocks["mut_pose"],
                 ),
-                patch("mutation.ddg_calc.backup") as mock_backup,
+                patch("mutadock.mutation.ddg_calc.backup") as mock_backup,
             ):
                 ddg_calc.calc_ddg(self.pdb_file, self.in_csv, out_file=out)
 

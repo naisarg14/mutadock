@@ -1,5 +1,5 @@
 """
-Tests for docking.vina_dock
+Tests for mutadock.docking.vina_dock
 -----------------------------
 The AutoDock Vina Python bindings ('vina' package) are stubbed via
 patch.dict(sys.modules) so the real package need not be installed.
@@ -15,8 +15,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from docking import vina_dock
-from docking.exceptions import DockingRunError
+from mutadock.docking import vina_dock
+from mutadock.docking.exceptions import DockingRunError
 
 # ---------------------------------------------------------------------------
 # Helpers

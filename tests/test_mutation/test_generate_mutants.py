@@ -1,5 +1,5 @@
 """
-Tests for mutation.generate_mutants
+Tests for mutadock.mutation.generate_mutants
 -------------------------------------
 PyRosetta and tqdm are mocked at the sys.modules level *before* the module is
 imported so the tests run without the real (heavyweight) packages.
@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 # Bio / PyRosetta / tqdm stubs are already injected by conftest.py before
 # this module is imported.
 # ---------------------------------------------------------------------------
-from mutation import generate_mutants
+from mutadock.mutation import generate_mutants
 
 # Grab references to the toolbox mock so tests can reset / inspect it.
 _pyrosetta_mock = sys.modules["pyrosetta"]

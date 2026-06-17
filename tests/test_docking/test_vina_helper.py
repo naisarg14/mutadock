@@ -1,5 +1,5 @@
 """
-Tests for docking.vina_helper
+Tests for mutadock.docking.vina_helper
 -------------------------------
 External deps (meeko, rdkit, pdbfixer, openmm) are injected into
 sys.modules per-test using patch.dict so the real packages need not be installed.
@@ -16,8 +16,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from docking import vina_helper
-from docking.exceptions import (
+from mutadock.docking import vina_helper
+from mutadock.docking.exceptions import (
     ConfigError,
     DockingRunError,
     LigandPreparationError,
@@ -388,7 +388,7 @@ class TestPrepareReceptor(unittest.TestCase):
             vina_helper.prepare_receptor(self.pdb, self.out)
 
     def test_meeko_failure_raises(self):
-        from docking.exceptions import ReceptorPreparationError
+        from mutadock.docking.exceptions import ReceptorPreparationError
 
         modules, _, meeko_stub, _ = self._build_modules()
         meeko_stub.PDBQTWriterLegacy.write_string.side_effect = RuntimeError(
@@ -399,7 +399,7 @@ class TestPrepareReceptor(unittest.TestCase):
                 vina_helper.prepare_receptor(self.pdb, self.out)
 
     def test_pdbfixer_failure_raises(self):
-        from docking.exceptions import ReceptorPreparationError
+        from mutadock.docking.exceptions import ReceptorPreparationError
 
         modules, pdbfixer_stub, _, _ = self._build_modules()
         pdbfixer_stub.PDBFixer.side_effect = RuntimeError("bad pdb")
@@ -408,7 +408,7 @@ class TestPrepareReceptor(unittest.TestCase):
                 vina_helper.prepare_receptor(self.pdb, self.out)
 
     def test_rdkit_returns_none_raises(self):
-        from docking.exceptions import ReceptorPreparationError
+        from mutadock.docking.exceptions import ReceptorPreparationError
 
         modules, _, _, rdkit_chem_stub = self._build_modules()
         rdkit_chem_stub.MolFromPDBFile.return_value = None
@@ -438,7 +438,7 @@ class TestPrepareReceptor(unittest.TestCase):
         self.assertTrue(any("_fixed.pdb" in p for p in recorded))
 
     def test_tmp_file_cleaned_up_after_failure(self):
-        from docking.exceptions import ReceptorPreparationError
+        from mutadock.docking.exceptions import ReceptorPreparationError
 
         modules, _, meeko_stub, _ = self._build_modules()
         meeko_stub.PDBQTWriterLegacy.write_string.side_effect = RuntimeError("fail")

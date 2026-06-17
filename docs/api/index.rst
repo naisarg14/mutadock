@@ -5,24 +5,24 @@ API Reference
    :maxdepth: 1
    :caption: Docking
 
-   docking.exceptions
-   docking.vina_helper
-   docking.vina_dock
-   docking.np_docking
+   mutadock.docking.exceptions
+   mutadock.docking.vina_helper
+   mutadock.docking.vina_dock
+   mutadock.docking.np_docking
 
 .. toctree::
    :maxdepth: 1
    :caption: Mutation
 
-   mutation.exceptions
-   mutation.helpers
-   mutation.Amino
-   mutation.csv_generator
-   mutation.csv_sort
-   mutation.ddg_calc
-   mutation.ddg_calc_double
-   mutation.ddg_calc_triple
-   mutation.generate_mutants
-   mutation.generate_mutant_pdb
-   mutation.predict_ddG
-   mutation.np_mutation
+   mutadock.mutation.exceptions
+   mutadock.mutation.helpers
+   mutadock.mutation.Amino
+   mutadock.mutation.csv_generator
+   mutadock.mutation.csv_sort
+   mutadock.mutation.ddg_calc
+   mutadock.mutation.ddg_calc_double
+   mutadock.mutation.ddg_calc_triple
+   mutadock.mutation.generate_mutants
+   mutadock.mutation.generate_mutant_pdb
+   mutadock.mutation.predict_ddG
+   mutadock.mutation.np_mutation

@@ -1,5 +1,5 @@
 """
-Tests for docking.np_docking
+Tests for mutadock.docking.np_docking
 ------------------------------
 All external docking helpers (prepare_receptor, prepare_ligand, dock_vina,
 vina_split, add_score_to_csv, backup, read_config) are patched in
@@ -15,8 +15,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from docking import np_docking
-from docking.exceptions import (
+from mutadock.docking import np_docking
+from mutadock.docking.exceptions import (
     DockingRunError,
     LigandPreparationError,
     ReceptorPreparationError,
@@ -146,17 +146,25 @@ class TestNaisarg(unittest.TestCase):
         """Context manager that patches every vina_helper function in np_docking."""
         return (
             patch(
-                "docking.np_docking.prepare_inputs",
+                "mutadock.docking.np_docking.prepare_inputs",
                 return_value=self._prepare_inputs_return(),
             ),
-            patch("docking.np_docking.prepare_receptor", return_value=(True, "")),
-            patch("docking.np_docking.prepare_ligand", return_value=(True, "")),
-            patch("docking.np_docking.dock_vina", return_value=(True, "")),
             patch(
-                "docking.np_docking.vina_split", return_value=(-8.5, "out_ligand_1.sdf")
+                "mutadock.docking.np_docking.prepare_receptor", return_value=(True, "")
             ),
-            patch("docking.np_docking.add_score_to_csv", return_value=(True, "name")),
-            patch("docking.np_docking.backup", return_value=False),
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand", return_value=(True, "")
+            ),
+            patch("mutadock.docking.np_docking.dock_vina", return_value=(True, "")),
+            patch(
+                "mutadock.docking.np_docking.vina_split",
+                return_value=(-8.5, "out_ligand_1.sdf"),
+            ),
+            patch(
+                "mutadock.docking.np_docking.add_score_to_csv",
+                return_value=(True, "name"),
+            ),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
         )
 
     def _run(self, **extra_patches):
@@ -205,17 +213,25 @@ class TestNaisarg(unittest.TestCase):
         # Second run: dock should NOT be called again
         with (
             patch(
-                "docking.np_docking.prepare_inputs",
+                "mutadock.docking.np_docking.prepare_inputs",
                 return_value=self._prepare_inputs_return(),
             ),
-            patch("docking.np_docking.prepare_receptor", return_value=(True, "")),
-            patch("docking.np_docking.prepare_ligand", return_value=(True, "")),
             patch(
-                "docking.np_docking.dock_vina", return_value=(True, "")
+                "mutadock.docking.np_docking.prepare_receptor", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.dock_vina", return_value=(True, "")
             ) as mock_dock2,
-            patch("docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")),
-            patch("docking.np_docking.add_score_to_csv", return_value=(True, "n")),
-            patch("docking.np_docking.backup", return_value=False),
+            patch(
+                "mutadock.docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
+            ),
+            patch(
+                "mutadock.docking.np_docking.add_score_to_csv", return_value=(True, "n")
+            ),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
             np_docking.naisarg()
         mock_dock2.assert_not_called()
@@ -225,15 +241,25 @@ class TestNaisarg(unittest.TestCase):
         Path(self.completed).write_text(f"('{self.rec}', '{self.lig}')\n")
         with (
             patch(
-                "docking.np_docking.prepare_inputs",
+                "mutadock.docking.np_docking.prepare_inputs",
                 return_value=self._prepare_inputs_return(ignore_existing=True),
             ),
-            patch("docking.np_docking.prepare_receptor", return_value=(True, "")),
-            patch("docking.np_docking.prepare_ligand", return_value=(True, "")),
-            patch("docking.np_docking.dock_vina", return_value=(True, "")) as mock_dock,
-            patch("docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")),
-            patch("docking.np_docking.add_score_to_csv", return_value=(True, "n")),
-            patch("docking.np_docking.backup", return_value=False),
+            patch(
+                "mutadock.docking.np_docking.prepare_receptor", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.dock_vina", return_value=(True, "")
+            ) as mock_dock,
+            patch(
+                "mutadock.docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
+            ),
+            patch(
+                "mutadock.docking.np_docking.add_score_to_csv", return_value=(True, "n")
+            ),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
             np_docking.naisarg()
         mock_dock.assert_called_once()
@@ -245,18 +271,26 @@ class TestNaisarg(unittest.TestCase):
     def test_receptor_prep_failure_skips_combination(self):
         with (
             patch(
-                "docking.np_docking.prepare_inputs",
+                "mutadock.docking.np_docking.prepare_inputs",
                 return_value=self._prepare_inputs_return(),
             ),
             patch(
-                "docking.np_docking.prepare_receptor",
+                "mutadock.docking.np_docking.prepare_receptor",
                 side_effect=ReceptorPreparationError("bad receptor"),
             ),
-            patch("docking.np_docking.prepare_ligand", return_value=(True, "")),
-            patch("docking.np_docking.dock_vina", return_value=(True, "")) as mock_dock,
-            patch("docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")),
-            patch("docking.np_docking.add_score_to_csv", return_value=(True, "n")),
-            patch("docking.np_docking.backup", return_value=False),
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.dock_vina", return_value=(True, "")
+            ) as mock_dock,
+            patch(
+                "mutadock.docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
+            ),
+            patch(
+                "mutadock.docking.np_docking.add_score_to_csv", return_value=(True, "n")
+            ),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
             np_docking.naisarg()
         mock_dock.assert_not_called()
@@ -264,18 +298,26 @@ class TestNaisarg(unittest.TestCase):
     def test_ligand_prep_failure_skips_combination(self):
         with (
             patch(
-                "docking.np_docking.prepare_inputs",
+                "mutadock.docking.np_docking.prepare_inputs",
                 return_value=self._prepare_inputs_return(),
             ),
-            patch("docking.np_docking.prepare_receptor", return_value=(True, "")),
             patch(
-                "docking.np_docking.prepare_ligand",
+                "mutadock.docking.np_docking.prepare_receptor", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand",
                 side_effect=LigandPreparationError("bad ligand"),
             ),
-            patch("docking.np_docking.dock_vina", return_value=(True, "")) as mock_dock,
-            patch("docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")),
-            patch("docking.np_docking.add_score_to_csv", return_value=(True, "n")),
-            patch("docking.np_docking.backup", return_value=False),
+            patch(
+                "mutadock.docking.np_docking.dock_vina", return_value=(True, "")
+            ) as mock_dock,
+            patch(
+                "mutadock.docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
+            ),
+            patch(
+                "mutadock.docking.np_docking.add_score_to_csv", return_value=(True, "n")
+            ),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
             np_docking.naisarg()
         mock_dock.assert_not_called()
@@ -283,22 +325,26 @@ class TestNaisarg(unittest.TestCase):
     def test_docking_failure_skips_split_and_csv(self):
         with (
             patch(
-                "docking.np_docking.prepare_inputs",
+                "mutadock.docking.np_docking.prepare_inputs",
                 return_value=self._prepare_inputs_return(),
             ),
-            patch("docking.np_docking.prepare_receptor", return_value=(True, "")),
-            patch("docking.np_docking.prepare_ligand", return_value=(True, "")),
             patch(
-                "docking.np_docking.dock_vina",
+                "mutadock.docking.np_docking.prepare_receptor", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.dock_vina",
                 side_effect=DockingRunError("vina error"),
             ),
             patch(
-                "docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
+                "mutadock.docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
             ) as mock_split,
             patch(
-                "docking.np_docking.add_score_to_csv", return_value=(True, "n")
+                "mutadock.docking.np_docking.add_score_to_csv", return_value=(True, "n")
             ) as mock_csv,
-            patch("docking.np_docking.backup", return_value=False),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
             np_docking.naisarg()
         mock_split.assert_not_called()

@@ -40,21 +40,21 @@ try:
     )
     from .helpers import backup, clean_pdb, file_info, permutations
 except ImportError:
-    src_dir = Path(__file__).resolve().parents[1]
+    src_dir = Path(__file__).resolve().parents[2]
     if str(src_dir) not in sys.path:
         sys.path.insert(0, str(src_dir))
 
-    from mutation.csv_generator import generate_csv
-    from mutation.csv_sort import sort_csv
-    from mutation.ddg_calc import calc_ddg
-    from mutation.ddg_calc_double import calc_double_ddg
-    from mutation.ddg_calc_triple import calc_triple_ddg
-    from mutation.generate_mutants import (
+    from mutadock.mutation.csv_generator import generate_csv
+    from mutadock.mutation.csv_sort import sort_csv
+    from mutadock.mutation.ddg_calc import calc_ddg
+    from mutadock.mutation.ddg_calc_double import calc_double_ddg
+    from mutadock.mutation.ddg_calc_triple import calc_triple_ddg
+    from mutadock.mutation.generate_mutants import (
         generate_double_mutation,
         generate_single_mutation,
         generate_triple_mutation,
     )
-    from mutation.helpers import backup, clean_pdb, file_info, permutations
+    from mutadock.mutation.helpers import backup, clean_pdb, file_info, permutations
 
 # Configure logging
 logging.basicConfig(

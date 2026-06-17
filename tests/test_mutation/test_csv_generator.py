@@ -1,5 +1,5 @@
 """
-Tests for mutation.csv_generator
+Tests for mutadock.mutation.csv_generator
 ---------------------------------
 Covers: get_residues(), generate_csv(), and PAM250 filtering logic.
 
@@ -14,14 +14,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
-# Path setup — add src/ so "mutation.*" imports resolve without installation.
+# Path setup — add src/ so "mutadock.mutation.*" imports resolve without installation.
 # Bio / PyRosetta / tqdm stubs are already injected by conftest.py before
 # this module is imported, so no additional stub setup is needed here.
 # ---------------------------------------------------------------------------
-from mutation.Amino import get_dict
-from mutation.csv_generator import generate_csv, get_residues
-from mutation.exceptions import CSVGenerationError, PDBFileError
-from mutation.helpers import DATA_DIR, load_matrix
+from mutadock.mutation.Amino import get_dict
+from mutadock.mutation.csv_generator import generate_csv, get_residues
+from mutadock.mutation.exceptions import CSVGenerationError, PDBFileError
+from mutadock.mutation.helpers import DATA_DIR, load_matrix
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -56,7 +56,7 @@ class TestGetResidues(unittest.TestCase):
 
     def test_raises_for_nonexistent_file(self):
         """FileNotFoundError from PDBParser.get_structure → PDBFileError."""
-        with patch("mutation.csv_generator.PDBParser") as MockParser:
+        with patch("mutadock.mutation.csv_generator.PDBParser") as MockParser:
             MockParser.return_value.get_structure.side_effect = FileNotFoundError
             with self.assertRaises(PDBFileError):
                 get_residues("/nonexistent/path/fake_protein.pdb")
@@ -69,7 +69,7 @@ class TestGetResidues(unittest.TestCase):
         ]
         mock_structure = _make_mock_structure(residues_in)
 
-        with patch("mutation.csv_generator.PDBParser") as MockParser:
+        with patch("mutadock.mutation.csv_generator.PDBParser") as MockParser:
             MockParser.return_value.get_structure.return_value = mock_structure
             with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as f:
                 tmp_path = f.name
@@ -92,7 +92,7 @@ class TestGetResidues(unittest.TestCase):
         ]
         mock_structure = _make_mock_structure(residues_in)
 
-        with patch("mutation.csv_generator.PDBParser") as MockParser:
+        with patch("mutadock.mutation.csv_generator.PDBParser") as MockParser:
             MockParser.return_value.get_structure.return_value = mock_structure
             with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as f:
                 tmp_path = f.name
@@ -114,7 +114,7 @@ class TestGetResidues(unittest.TestCase):
         ]
         mock_structure = _make_mock_structure(residues_in)
 
-        with patch("mutation.csv_generator.PDBParser") as MockParser:
+        with patch("mutadock.mutation.csv_generator.PDBParser") as MockParser:
             MockParser.return_value.get_structure.return_value = mock_structure
             with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as f:
                 tmp_path = f.name
@@ -134,7 +134,7 @@ class TestGetResidues(unittest.TestCase):
         """A structure with no residues → empty dict (not None)."""
         mock_structure = _make_mock_structure([])
 
-        with patch("mutation.csv_generator.PDBParser") as MockParser:
+        with patch("mutadock.mutation.csv_generator.PDBParser") as MockParser:
             MockParser.return_value.get_structure.return_value = mock_structure
             with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as f:
                 tmp_path = f.name
@@ -166,7 +166,7 @@ class TestGetResidues(unittest.TestCase):
         mock_structure = MagicMock()
         mock_structure.__iter__ = MagicMock(return_value=iter([mock_model]))
 
-        with patch("mutation.csv_generator.PDBParser") as MockParser:
+        with patch("mutadock.mutation.csv_generator.PDBParser") as MockParser:
             MockParser.return_value.get_structure.return_value = mock_structure
             with tempfile.NamedTemporaryFile(suffix=".pdb", delete=False) as f:
                 tmp_path = f.name
@@ -211,16 +211,16 @@ class TestGenerateCsv(unittest.TestCase):
 
     def test_raises_when_get_residues_returns_none(self):
         with (
-            patch("mutation.csv_generator.get_residues", return_value=None),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.get_residues", return_value=None),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             with self.assertRaises(CSVGenerationError):
                 generate_csv(self.pdb_file)
 
     def test_raises_when_residues_empty(self):
         with (
-            patch("mutation.csv_generator.get_residues", return_value={}),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.get_residues", return_value={}),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             with self.assertRaises(CSVGenerationError):
                 generate_csv(self.pdb_file)
@@ -230,10 +230,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             result = generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
         self.assertIsInstance(result, tuple)
@@ -244,10 +244,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
         self.assertTrue(Path(out_op).is_file())
@@ -268,10 +268,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
@@ -287,10 +287,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(resname="ALA"),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
         rows = self._read_csv(out_all)
@@ -302,10 +302,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(resname="ALA"),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
@@ -326,10 +326,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(resname="GLY"),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
@@ -348,10 +348,10 @@ class TestGenerateCsv(unittest.TestCase):
 
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             result = generate_csv(pdb)
 
@@ -365,10 +365,10 @@ class TestGenerateCsv(unittest.TestCase):
         same_path = str(self.tmpdir / "same.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             result = generate_csv(self.pdb_file, out_all=same_path, out_op=same_path)
 
@@ -383,10 +383,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(resname="LEU"),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
@@ -401,8 +401,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         residues = {1: ("C", 42, "SER")}
         with (
-            patch("mutation.csv_generator.get_residues", return_value=residues),
-            patch("mutation.csv_generator.backup"),
+            patch(
+                "mutadock.mutation.csv_generator.get_residues", return_value=residues
+            ),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
@@ -416,10 +418,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(),
             ),
-            patch("mutation.csv_generator.backup"),
+            patch("mutadock.mutation.csv_generator.backup"),
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
@@ -433,10 +435,10 @@ class TestGenerateCsv(unittest.TestCase):
         out_all = str(self.tmpdir / "all.csv")
         with (
             patch(
-                "mutation.csv_generator.get_residues",
+                "mutadock.mutation.csv_generator.get_residues",
                 return_value=self._one_residue_dict(),
             ),
-            patch("mutation.csv_generator.backup") as mock_backup,
+            patch("mutadock.mutation.csv_generator.backup") as mock_backup,
         ):
             generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
 
