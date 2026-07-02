@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `requirements.txt` (consolidated into `pyproject.toml`)
 
 ### Fixed
+- `md_mutate` on a `.cif` input: the pipeline now converts CIF → PDB (via `convert_cif_pdb`) before cleaning, instead of text-cleaning the CIF as if it were PDB — which produced a malformed/near-empty structure and broke every downstream step
 - Windows file-descriptor leak in `prepare_receptor`: `tempfile.mkstemp` fd is now closed immediately with `os.close()` before the temp file is written, preventing `PermissionError` on cleanup
 - `sort_csv` ignored the sort direction — `ascending` was hard-coded `True`, so `md_csv_sort -d` silently produced ascending output (now honors the `order`/`-a`/`-d` flag)
 - `sort_csv` could not sort by column 0 (treated as "not provided" and dropped into an interactive `input()` prompt that hung in non-interactive use), and raised on string column indices from the CLI — now coerces the index to `int`, accepts column 0, and raises `MutationError` instead of prompting when no column is given

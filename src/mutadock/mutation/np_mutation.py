@@ -42,6 +42,7 @@ try:
     from .helpers import (
         backup,
         clean_pdb,
+        convert_cif_pdb,
         fetch_pdb,
         file_info,
         permutations,
@@ -66,6 +67,7 @@ except ImportError:
     from mutadock.mutation.helpers import (
         backup,
         clean_pdb,
+        convert_cif_pdb,
         fetch_pdb,
         file_info,
         permutations,
@@ -110,6 +112,19 @@ def np_mutation() -> None:
         append,
         quiet,
     ) = get_inputs()
+
+    # Convert CIF input to PDB up front.  The rest of the pipeline (clean_pdb,
+    # BioPython PDBParser, PyRosetta) only understands PDB, so a .cif must be
+    # converted here rather than text-cleaned as if it were already PDB.
+    if Path(full_pdb_path).suffix.lower() == ".cif":
+        if not quiet:
+            logger.info(f"Converting CIF file {full_pdb_path} to PDB format.")
+        converted_pdb = str(Path(full_pdb_path).with_suffix(".pdb"))
+        # Preserve any pre-existing <stem>.pdb rather than silently overwriting it.
+        backup(converted_pdb)
+        with suppress_stdout():
+            convert_cif_pdb(full_pdb_path, converted_pdb)
+        full_pdb_path = converted_pdb
 
     # Warn about structural features that affect residue numbering.  Run on the
     # original file: clean_pdb drops MODEL records, so multi-model ensembles must

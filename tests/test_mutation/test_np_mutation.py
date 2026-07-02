@@ -197,5 +197,76 @@ class TestPdbIdArg(unittest.TestCase):
             self._get_inputs([])
 
 
+# ---------------------------------------------------------------------------
+# CIF input is converted to PDB before the rest of the pipeline runs
+# ---------------------------------------------------------------------------
+
+
+class TestCifConversion(unittest.TestCase):
+    """The pipeline only understands PDB; a .cif must be converted up front
+    rather than text-cleaned as if it were already PDB."""
+
+    def _drive(self, input_path: str, convert_return: str = "/work/prot.pdb"):
+        """Run np_mutation() with all stages mocked.
+
+        Returns ``(convert_mock, clean_mock)`` for assertions.
+        """
+        inputs = (input_path, 4, 15, 15, 3, 15, True, True)
+        with (
+            patch.object(np_mutation, "get_inputs", return_value=inputs),
+            patch.object(np_mutation, "file_info", return_value=(False, 0)),
+            patch.object(
+                np_mutation, "convert_cif_pdb", return_value=convert_return
+            ) as mock_conv,
+            patch.object(np_mutation, "structure_warnings", return_value=[]),
+            patch.object(np_mutation, "clean_pdb") as mock_clean,
+            patch.object(
+                np_mutation,
+                "generate_csv",
+                return_value=("/work/prot_mutations.csv", None),
+            ),
+            patch.object(np_mutation, "calc_ddg", return_value="/work/prot_ddG.csv"),
+            patch.object(
+                np_mutation,
+                "calc_double_ddg",
+                return_value="/work/prot_double_ddg.csv",
+            ),
+            patch.object(
+                np_mutation,
+                "calc_triple_ddg",
+                return_value="/work/prot_triple_ddg.csv",
+            ),
+            patch.object(
+                np_mutation,
+                "sort_csv",
+                side_effect=lambda in_file, *a, **k: (
+                    k.get("out_file")
+                    or f"{str(in_file).removesuffix('.csv')}_sorted.csv"
+                ),
+            ),
+            patch.object(np_mutation, "generate_single_mutation"),
+            patch.object(np_mutation, "generate_double_mutation"),
+            patch.object(np_mutation, "generate_triple_mutation"),
+            patch.object(np_mutation, "backup"),
+        ):
+            np_mutation.np_mutation()
+        return mock_conv, mock_clean
+
+    def test_cif_input_is_converted_before_cleaning(self):
+        mock_conv, mock_clean = self._drive("/work/prot.cif")
+        # convert_cif_pdb was called with the .cif input
+        mock_conv.assert_called_once()
+        self.assertEqual(mock_conv.call_args[0][0], "/work/prot.cif")
+        # clean_pdb operated on the converted .pdb, never the raw .cif
+        clean_input = str(mock_clean.call_args[0][0])
+        self.assertTrue(clean_input.endswith(".pdb"))
+        self.assertNotIn(".cif", clean_input)
+
+    def test_pdb_input_is_not_converted(self):
+        mock_conv, mock_clean = self._drive("/work/prot.pdb")
+        mock_conv.assert_not_called()
+        self.assertEqual(str(mock_clean.call_args[0][0]), "/work/prot.pdb")
+
+
 if __name__ == "__main__":
     unittest.main()
