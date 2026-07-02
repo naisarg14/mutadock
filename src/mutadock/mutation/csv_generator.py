@@ -114,8 +114,19 @@ def generate_csv(
     score_dict = resolve_matrix(matrix, matrix_file)
     for key in residues:
         residue = residues[key]
+        if residue[2] not in aa_dict or residue[2] not in score_dict:
+            logger.warning(
+                "Skipping non-standard residue '%s' (chain %s, position %s) "
+                "not found in the substitution matrix.",
+                residue[2],
+                residue[0],
+                residue[1],
+            )
+            continue
         for aa in aa_dict:
             if aa == residue[2]:
+                continue
+            if aa not in score_dict[residue[2]]:
                 continue
             prProb = float(score_dict[residue[2]][aa] / 100)
             row = [
@@ -135,6 +146,7 @@ def generate_csv(
                 count2 += 1
             count1 += 1
     f.close()
+    f_all.close()
     return out_op, out_all
 
 
@@ -151,7 +163,7 @@ def get_residues(file: str) -> dict[int, tuple[str, int, str]]:
         PDBFileError: If the file is not found.
     """
     residues: dict[int, tuple[str, int, str]] = {}
-    count = 0
+    count = 1
     parser = PDBParser(PERMISSIVE=1)
     try:
         structure = parser.get_structure(file, file)
@@ -160,9 +172,6 @@ def get_residues(file: str) -> dict[int, tuple[str, int, str]]:
     for model in structure:
         for chain in model:
             for residue in chain:
-                if count == 0:
-                    count += 1
-                    continue
                 full_id = residue.get_full_id()
                 chain_id = full_id[2]
                 position = full_id[3][1]

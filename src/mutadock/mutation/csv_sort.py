@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 from typing import Optional, Union
 
+from .exceptions import MutationError
 from .helpers import backup
 
 # Configure logging
@@ -65,7 +66,7 @@ def main() -> None:
         "-n", "--name", metavar="NAME", help="Name of the coloumn to sort"
     )
     parser.add_argument(
-        "-N", "--num", metavar="NUM", help="Number of the coloumn to sort"
+        "-N", "--num", metavar="NUM", type=int, help="Number of the coloumn to sort"
     )
 
     args = parser.parse_args()
@@ -110,8 +111,8 @@ def sort_csv(
     """Sort a CSV by a chosen column and renumber the ``sr`` serial column.
 
     The ``sr`` column is dropped and re-inserted as a sequential index after
-    sorting.  If neither *col_num* nor *col_name* is provided, the function
-    prints column names and prompts the user interactively.
+    sorting.  If neither *col_num* nor *col_name* is provided, the available
+    column names are logged and a :class:`MutationError` is raised.
 
     Args:
         in_file: Path to the input CSV (the ``.csv`` suffix is optional).
@@ -126,8 +127,11 @@ def sort_csv(
 
     Raises:
         FileNotFoundError: If *in_file* does not exist.
+        MutationError: If neither *col_num* nor *col_name* resolves to a column.
     """
     in_file = in_file.removesuffix(".csv")
+    if col_num is not None:
+        col_num = int(col_num)
     if not out_file:
         out_file = f"{in_file.removesuffix('.csv')}_sorted.csv"
     backup(out_file)
@@ -146,13 +150,16 @@ def sort_csv(
                 col_num = i
                 break
 
-    if not col_num:
+    if col_num is None:
         count = 0
         for i in df.columns.values:
             logger.info(f"{count}: {i}")
             count += 1
-        col_num = int(input("Enter the column number to sort by: "))
-    df = df.sort_values(by=df.columns[col_num], ascending=True)
+        raise MutationError(
+            "No column specified to sort by; provide col_num or col_name "
+            "(see logged column list above)."
+        )
+    df = df.sort_values(by=df.columns[col_num], ascending=order)
     df = df.iloc[:, 1:]
     df.insert(0, "sr", range(1, 1 + df.shape[0]))
     df.to_csv(out_file, index=False)

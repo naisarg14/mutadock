@@ -241,7 +241,7 @@ def np_mutation() -> None:
     if (
         file_info(out_file)[0]
         and append
-        and file_info(out_file)[1] == permutations(num_double_ddg, 2)
+        and file_info(out_file)[1] == permutations(num_triple_ddg, 3)
     ):
         triple_ddg_out_sort = out_file
         if not quiet:
@@ -361,9 +361,12 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
         default=15,
     )
     parser.add_argument(
-        "--noappend",
-        help="Generate all files again (Default: False)",
-        action="store_false",
+        "--no-append",
+        dest="no_append",
+        help="Regenerate all output files even if they already exist "
+        "(Default: reuse existing files).",
+        action="store_true",
+        default=False,
     )
     parser.add_argument(
         "--quiet",
@@ -400,7 +403,7 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
         args.dpm,
         args.triple,
         args.tpm,
-        args.noappend,
+        not args.no_append,
         args.quiet,
     )
 

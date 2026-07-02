@@ -15,7 +15,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from mutadock.docking import vina_dock
+from mutadock.docking import vina_dock, vina_helper
 from mutadock.docking.exceptions import DockingRunError
 
 # ---------------------------------------------------------------------------
@@ -148,6 +148,67 @@ class TestVinaDock(unittest.TestCase):
         with patch.dict(sys.modules, {"vina": stub}):
             with self.assertRaises(DockingRunError):
                 vina_dock.vina_dock(self.receptor, self.ligand, self.output)
+
+
+# ===========================================================================
+# TestOverwriteRoundTrip
+# ===========================================================================
+#
+# Bug 2.6: dock_vina (vina_helper) emits an overwrite flag that vina_dock.py's
+# argparse must accept, and the parsed value must reach write_poses with the
+# intended boolean. This exercises BOTH sides so a one-sided fix is caught.
+
+
+class TestOverwriteRoundTrip(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.receptor = str(Path(self.tmpdir) / "rec.pdbqt")
+        self.ligand = str(Path(self.tmpdir) / "lig.pdbqt")
+        self.output = str(Path(self.tmpdir) / "out.pdbqt")
+        self.log = str(Path(self.tmpdir) / "log.txt")
+        Path(self.receptor).touch()
+        Path(self.ligand).touch()
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _emitted_commands(self, overwrite):
+        """Return the argv list dock_vina would run vina_dock.py with."""
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        with patch("subprocess.run", return_value=mock_result) as mock_run:
+            vina_helper.dock_vina(
+                self.receptor,
+                self.ligand,
+                self.output,
+                self.log,
+                overwrite=overwrite,
+            )
+        return mock_run.call_args[0][0]
+
+    def _parse_overwrite(self, cmd):
+        """Feed the emitted args (minus python + script path) into vina_dock's
+        parser via main() and capture the overwrite value handed to vina_dock."""
+        argv = ["vina_dock.py"] + list(cmd[2:])
+        with patch.object(vina_dock, "vina_dock") as mock_dock:
+            with patch.object(sys, "argv", argv):
+                with self.assertRaises(SystemExit) as ctx:
+                    vina_dock.main()
+        self.assertEqual(ctx.exception.code, 0)
+        return mock_dock.call_args.kwargs["overwrite"]
+
+    def test_overwrite_true_roundtrips(self):
+        cmd = self._emitted_commands(True)
+        self.assertIn("--overwrite", cmd)
+        self.assertTrue(self._parse_overwrite(cmd))
+
+    def test_overwrite_false_roundtrips(self):
+        cmd = self._emitted_commands(False)
+        self.assertIn("--no-overwrite", cmd)
+        self.assertFalse(self._parse_overwrite(cmd))
 
 
 if __name__ == "__main__":

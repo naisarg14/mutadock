@@ -77,6 +77,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Extra padding (in Angstroms) added to the docking box beyond the binding-site
+# cluster diameter (2 * radius). Keeps the box tight around the AutoSite cluster
+# instead of forcing a large whole-protein search.
+DEFAULT_BOX_MARGIN = 8.0
+
 
 @contextmanager
 def suppress_stdout() -> Any:
@@ -123,7 +128,7 @@ def np_docking() -> None:
         try:
             center = list(calculate_geometric_center(autosite))
             radius = calculate_radius(autosite)
-            box_dim = max(50.0, radius) * 2
+            box_dim = radius * 2 + DEFAULT_BOX_MARGIN
             box_size = [box_dim, box_dim, box_dim]
         except Exception as e:
             sys.exit(
@@ -173,7 +178,7 @@ def np_docking() -> None:
     for combination in tqdm(combinations):
         receptor = combination[0]
         ligand = combination[1]
-        prepared_receptor = f"{receptor}qt"
+        prepared_receptor = str(Path(receptor).with_suffix(".pdbqt"))
 
         if ligand.endswith(".sdf"):
             prepared_ligand = f"{ligand.removesuffix('.sdf')}.pdbqt"
@@ -207,9 +212,7 @@ def np_docking() -> None:
             if not quiet:
                 logger.info(f"Docking for {ligand} with {receptor}")
             if not quiet:
-                logger.info(
-                    "Press Ctrl+D (EOFE Error) to skip this receptor-ligand combination."
-                )
+                logger.info("Press Ctrl+D to skip this receptor-ligand combination.")
             if not Path(prepared_receptor).exists() or ignore_existing:
                 if not quiet:
                     logger.info(f"Preparing receptor {receptor}")
@@ -261,7 +264,7 @@ def np_docking() -> None:
                         loop_center = list(calculate_geometric_center(str(cluster_pdb)))
                         print(f"Calculated box center: {loop_center}")
                         radius = calculate_radius(str(cluster_pdb))
-                        box_dim = max(50.0, radius) * 2
+                        box_dim = radius * 2 + DEFAULT_BOX_MARGIN
                         print(f"Calculated box size: {box_dim} (radius: {radius})")
                         loop_box_size = [box_dim, box_dim, box_dim]
                         autosite_cache[prepared_receptor] = (loop_center, loop_box_size)
@@ -405,7 +408,7 @@ def prepare_inputs() -> (
         "-i",
         "--ignore_existing",
         action="store_true",
-        help="Run the Docking while ingoring existing files. All dockings will be performed again. (default: False).",
+        help="Run the Docking while ignoring existing files. All dockings will be performed again. (default: False).",
     )
 
     args = parser.parse_args()
@@ -426,12 +429,12 @@ def prepare_inputs() -> (
         with open(receptor_txt) as rec:
             receptors = rec.readlines()
     except OSError as err:
-        sys.exit(f"Error reading the file {receptor_txt}: ".format(receptor_txt, err))
+        sys.exit(f"Error reading the file {receptor_txt}: {err}")
     try:
         with open(ligand_txt) as lig:
             ligands = lig.readlines()
     except OSError as err:
-        sys.exit(f"Error reading the file {ligand_txt}: ".format(ligand_txt, err))
+        sys.exit(f"Error reading the file {ligand_txt}: {err}")
 
     for i in range(len(receptors)):
         receptors[i] = receptors[i].strip()
@@ -456,9 +459,6 @@ def prepare_inputs() -> (
         completed_name,
         args.ignore_existing,
     )
-
-
-naisarg = np_docking
 
 
 if __name__ == "__main__":

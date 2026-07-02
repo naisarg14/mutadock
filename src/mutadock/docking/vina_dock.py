@@ -163,7 +163,10 @@ def main() -> None:
         help="Number of poses to write (default: 5)",
     )
     parser.add_argument(
-        "--overwrite", action="store_true", help="Overwrite existing output file"
+        "--overwrite",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Overwrite existing output file (use --no-overwrite to disable)",
     )
 
     args = parser.parse_args()

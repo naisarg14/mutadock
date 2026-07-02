@@ -109,7 +109,7 @@ class TestPrepareInputs(unittest.TestCase):
 
 
 class TestNaisarg(unittest.TestCase):
-    """Integration tests for the main naisarg() orchestration function."""
+    """Integration tests for the main np_docking() orchestration function."""
 
     def setUp(self):
         self.tmpdir = Path(tempfile.mkdtemp())
@@ -179,7 +179,7 @@ class TestNaisarg(unittest.TestCase):
             patches[5] as mock_csv,
             patches[6] as mock_backup,
         ):
-            np_docking.naisarg()
+            np_docking.np_docking()
         return mock_pi, mock_rec, mock_lig, mock_dock, mock_split, mock_csv, mock_backup
 
     # ------------------------------------------------------------------ #
@@ -233,7 +233,7 @@ class TestNaisarg(unittest.TestCase):
             ),
             patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
-            np_docking.naisarg()
+            np_docking.np_docking()
         mock_dock2.assert_not_called()
 
     def test_ignore_existing_redocks_all(self):
@@ -261,7 +261,7 @@ class TestNaisarg(unittest.TestCase):
             ),
             patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
-            np_docking.naisarg()
+            np_docking.np_docking()
         mock_dock.assert_called_once()
 
     # ------------------------------------------------------------------ #
@@ -292,7 +292,7 @@ class TestNaisarg(unittest.TestCase):
             ),
             patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
-            np_docking.naisarg()
+            np_docking.np_docking()
         mock_dock.assert_not_called()
 
     def test_ligand_prep_failure_skips_combination(self):
@@ -319,7 +319,7 @@ class TestNaisarg(unittest.TestCase):
             ),
             patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
-            np_docking.naisarg()
+            np_docking.np_docking()
         mock_dock.assert_not_called()
 
     def test_docking_failure_skips_split_and_csv(self):
@@ -346,9 +346,119 @@ class TestNaisarg(unittest.TestCase):
             ) as mock_csv,
             patch("mutadock.docking.np_docking.backup", return_value=False),
         ):
-            np_docking.naisarg()
+            np_docking.np_docking()
         mock_split.assert_not_called()
         mock_csv.assert_not_called()
+
+    # ------------------------------------------------------------------ #
+    # Prepared-receptor name derivation (bug 2.5)                          #
+    # ------------------------------------------------------------------ #
+
+    def _run_with_receptor(self, receptor_path):
+        """Run np_docking() for a single receptor and return the mocked
+        prepare_receptor mock so its call args can be inspected."""
+        prepare_inputs_return = (
+            [receptor_path],
+            [self.lig],
+            self.config,  # config file path -> center/box_size defined
+            None,  # autosite
+            True,  # quiet
+            self.completed,
+            False,  # ignore_existing
+        )
+        with (
+            patch(
+                "mutadock.docking.np_docking.prepare_inputs",
+                return_value=prepare_inputs_return,
+            ),
+            patch(
+                "mutadock.docking.np_docking.prepare_receptor", return_value=(True, "")
+            ) as mock_rec,
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.dock_vina", return_value=(True, "")
+            ) as mock_dock,
+            patch(
+                "mutadock.docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
+            ),
+            patch(
+                "mutadock.docking.np_docking.add_score_to_csv", return_value=(True, "n")
+            ),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
+        ):
+            np_docking.np_docking()
+        return mock_rec, mock_dock
+
+    def test_prepared_receptor_name_for_pdb(self):
+        rec_pdb = str(self.tmpdir / "prot.pdb")
+        Path(rec_pdb).touch()
+        mock_rec, mock_dock = self._run_with_receptor(rec_pdb)
+        prepared = mock_rec.call_args.kwargs["output_pdbqt"]
+        self.assertEqual(prepared, str(self.tmpdir / "prot.pdbqt"))
+        # dock_vina receives the same prepared receptor as its first arg.
+        self.assertEqual(mock_dock.call_args.args[0], prepared)
+
+    def test_prepared_receptor_name_for_cif(self):
+        rec_cif = str(self.tmpdir / "prot.cif")
+        Path(rec_cif).touch()
+        mock_rec, mock_dock = self._run_with_receptor(rec_cif)
+        prepared = mock_rec.call_args.kwargs["output_pdbqt"]
+        # A .cif input must yield <stem>.pdbqt, NOT prot.cifqt.
+        self.assertEqual(prepared, str(self.tmpdir / "prot.pdbqt"))
+        self.assertFalse(prepared.endswith(".cifqt"))
+        self.assertEqual(mock_dock.call_args.args[0], prepared)
+
+    # ------------------------------------------------------------------ #
+    # Auto-box dimension tracks cluster radius (bug 2.14)                  #
+    # ------------------------------------------------------------------ #
+
+    def test_autobox_tracks_radius_not_floored(self):
+        radius = 5.0
+        prepare_inputs_return = (
+            [self.rec],
+            [self.lig],
+            None,  # config -> use autosite path instead
+            str(self.tmpdir / "autosite_cluster.pdb"),  # autosite PDB
+            True,  # quiet
+            self.completed,
+            False,  # ignore_existing
+        )
+        with (
+            patch(
+                "mutadock.docking.np_docking.prepare_inputs",
+                return_value=prepare_inputs_return,
+            ),
+            patch(
+                "mutadock.docking.np_docking.calculate_geometric_center",
+                return_value=(1.0, 2.0, 3.0),
+            ),
+            patch("mutadock.docking.np_docking.calculate_radius", return_value=radius),
+            patch(
+                "mutadock.docking.np_docking.prepare_receptor", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.prepare_ligand", return_value=(True, "")
+            ),
+            patch(
+                "mutadock.docking.np_docking.dock_vina", return_value=(True, "")
+            ) as mock_dock,
+            patch(
+                "mutadock.docking.np_docking.vina_split", return_value=(-8.5, "f.sdf")
+            ),
+            patch(
+                "mutadock.docking.np_docking.add_score_to_csv", return_value=(True, "n")
+            ),
+            patch("mutadock.docking.np_docking.backup", return_value=False),
+        ):
+            np_docking.np_docking()
+
+        box_size = mock_dock.call_args.kwargs["box_size"]
+        expected = radius * 2 + np_docking.DEFAULT_BOX_MARGIN
+        self.assertEqual(box_size, [expected, expected, expected])
+        # Small cluster must NOT be blown up to the old >=100 A floor.
+        self.assertLess(box_size[0], 100.0)
 
 
 if __name__ == "__main__":

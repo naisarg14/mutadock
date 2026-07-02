@@ -62,9 +62,9 @@ class TestGetResidues(unittest.TestCase):
                 get_residues("/nonexistent/path/fake_protein.pdb")
 
     def test_returns_dict_for_valid_structure(self):
-        """Two residues in PDB → first skipped, second stored."""
+        """Two residues in PDB → both stored (no residue is dropped)."""
         residues_in = [
-            _make_mock_residue("A", 1, "ALA"),  # skipped (count==0 guard)
+            _make_mock_residue("A", 1, "ALA"),
             _make_mock_residue("A", 2, "GLY"),
         ]
         mock_structure = _make_mock_structure(residues_in)
@@ -80,13 +80,13 @@ class TestGetResidues(unittest.TestCase):
 
         self.assertIsNotNone(result)
         self.assertIsInstance(result, dict)
-        # Only the second residue ends up in the dict
-        self.assertEqual(len(result), 1)
+        # Both residues end up in the dict — the first is no longer dropped.
+        self.assertEqual(len(result), 2)
 
-    def test_skips_first_residue(self):
-        """The count==0 guard always discards the very first residue encountered."""
+    def test_first_residue_is_included(self):
+        """The N-terminal residue of the first chain must be present (regression: 2.3)."""
         residues_in = [
-            _make_mock_residue("A", 1, "ALA"),  # must be skipped
+            _make_mock_residue("A", 1, "ALA"),  # first residue — must NOT be dropped
             _make_mock_residue("A", 2, "GLY"),
             _make_mock_residue("A", 3, "VAL"),
         ]
@@ -101,15 +101,20 @@ class TestGetResidues(unittest.TestCase):
             finally:
                 Path(tmp_path).unlink()
 
-        self.assertEqual(len(result), 2)
-        # First kept residue is GLY (the ALA was skipped)
+        self.assertEqual(len(result), 3)
+        # First stored residue is the ALA at position 1.
         first_key = min(result.keys())
-        self.assertEqual(result[first_key][2], "GLY")
+        self.assertEqual(result[first_key], ("A", 1, "ALA"))
+        # Numbering still starts at 1.
+        self.assertEqual(first_key, 1)
+        # Every residue is represented.
+        names = {v[2] for v in result.values()}
+        self.assertEqual(names, {"ALA", "GLY", "VAL"})
 
     def test_residue_tuple_is_chain_position_name(self):
         """Each dict value is (chain, position, resname)."""
         residues_in = [
-            _make_mock_residue("B", 10, "LYS"),  # skipped
+            _make_mock_residue("B", 10, "LYS"),
             _make_mock_residue("B", 11, "TRP"),
         ]
         mock_structure = _make_mock_structure(residues_in)
@@ -123,9 +128,11 @@ class TestGetResidues(unittest.TestCase):
             finally:
                 Path(tmp_path).unlink()
 
-        self.assertEqual(len(result), 1)
-        key = list(result.keys())[0]
-        chain, position, name = result[key]
+        self.assertEqual(len(result), 2)
+        first_key = min(result.keys())
+        self.assertEqual(result[first_key], ("B", 10, "LYS"))
+        last_key = max(result.keys())
+        chain, position, name = result[last_key]
         self.assertEqual(chain, "B")
         self.assertEqual(position, 11)
         self.assertEqual(name, "TRP")
@@ -147,9 +154,9 @@ class TestGetResidues(unittest.TestCase):
         self.assertEqual(len(result), 0)
 
     def test_multiple_chains(self):
-        """Residues across two chains are all collected (minus the first)."""
+        """Residues across two chains are all collected."""
         chain_a_res = [
-            _make_mock_residue("A", 1, "ALA"),  # first ever → skipped
+            _make_mock_residue("A", 1, "ALA"),
             _make_mock_residue("A", 2, "SER"),
         ]
         chain_b_res = [
@@ -175,8 +182,8 @@ class TestGetResidues(unittest.TestCase):
             finally:
                 Path(tmp_path).unlink()
 
-        # 4 residues, first skipped → 3 stored
-        self.assertEqual(len(result), 3)
+        # 4 residues across both chains → all 4 stored
+        self.assertEqual(len(result), 4)
 
 
 # ---------------------------------------------------------------------------
@@ -445,6 +452,53 @@ class TestGenerateCsv(unittest.TestCase):
         called_paths = {call.args[0] for call in mock_backup.call_args_list}
         self.assertIn(out_op, called_paths)
         self.assertIn(out_all, called_paths)
+
+    def test_nonstandard_residue_does_not_raise(self):
+        """A residue absent from the matrix (e.g. MSE/HOH) is skipped, not fatal (2.9)."""
+        out_op = str(self.tmpdir / "op.csv")
+        out_all = str(self.tmpdir / "all.csv")
+        residues = {1: ("A", 1, "MSE"), 2: ("A", 2, "HOH")}
+        with (
+            patch(
+                "mutadock.mutation.csv_generator.get_residues", return_value=residues
+            ),
+            patch("mutadock.mutation.csv_generator.backup"),
+        ):
+            # Must not raise KeyError despite non-standard residue names,
+            # and a warning must be logged for the skipped residue.
+            with self.assertLogs("mutadock.mutation.csv_generator", level="WARNING"):
+                result = generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
+
+        self.assertIsNotNone(result)
+        # No standard mutations could be enumerated → only the header exists.
+        self.assertEqual(self._read_csv(out_all), [])
+        self.assertEqual(self._read_csv(out_op), [])
+
+    def test_nonstandard_residue_does_not_corrupt_serial_numbers(self):
+        """A skipped non-standard residue must not create gaps in the sr column."""
+        out_op = str(self.tmpdir / "op.csv")
+        out_all = str(self.tmpdir / "all.csv")
+        # A valid residue, a non-standard one, then another valid residue.
+        residues = {
+            1: ("A", 1, "ALA"),
+            2: ("A", 2, "MSE"),  # skipped
+            3: ("A", 3, "GLY"),
+        }
+        with (
+            patch(
+                "mutadock.mutation.csv_generator.get_residues", return_value=residues
+            ),
+            patch("mutadock.mutation.csv_generator.backup"),
+        ):
+            generate_csv(self.pdb_file, out_all=out_all, out_op=out_op)
+
+        rows = self._read_csv(out_all)
+        # Two valid residues × 19 substitutions each = 38 rows, no MSE rows.
+        self.assertEqual(len(rows), 38)
+        self.assertNotIn("MSE", {r["wtAA"] for r in rows})
+        # Serial numbers remain contiguous 1..38 with no gap from the skip.
+        sr_values = [int(r["sr"]) for r in rows]
+        self.assertEqual(sr_values, list(range(1, len(sr_values) + 1)))
 
 
 # ---------------------------------------------------------------------------

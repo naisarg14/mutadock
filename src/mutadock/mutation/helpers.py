@@ -181,12 +181,29 @@ def permutations(n: int, r: int) -> int:
         return int(factorial(n) / factorial(n - r))
 
 
-def clean_pdb(pdb_file: str, pdb_clean: Optional[str] = None) -> str:
-    """Strip a PDB file down to ATOM/TER/END records.
+def clean_pdb(
+    pdb_file: str, pdb_clean: Optional[str] = None, keep_hetatm: bool = False
+) -> str:
+    """Strip a PDB file down to ATOM/TER records, terminated by a single END.
+
+    Every ``ATOM`` (and ``TER``) record from the input is retained, regardless
+    of how many models the file contains.  Any ``END`` / ``ENDMDL`` markers in
+    the source are dropped and a single ``END`` line is appended at the very
+    end.  This matters because ``END`` is the PDB end-of-file marker: re-emitting
+    a stray or per-model ``END`` mid-file would cause any downstream parser
+    (e.g. PyRosetta's ``pose_from_pdb``) to silently truncate the structure at
+    the first one — the exact bug this function must avoid.
+
+    ``HETATM`` records (waters, ions, ligands, cofactors) are stripped by
+    default.  This is deliberate: mutation scoring runs on the apo protein, so
+    heteroatoms are intentionally excluded.  Pass ``keep_hetatm=True`` only if
+    you explicitly need them retained.
 
     Args:
         pdb_file: Path to the source PDB file.
         pdb_clean: Destination path.  Defaults to ``<stem>_clean.pdb``.
+        keep_hetatm: If ``True``, ``HETATM`` records are preserved.  Defaults
+            to ``False`` (strip them — the correct behaviour for apo scoring).
 
     Returns:
         Path to the cleaned PDB file.
@@ -209,9 +226,11 @@ def clean_pdb(pdb_file: str, pdb_clean: Optional[str] = None) -> str:
             for line in infile:
                 if line.startswith("ATOM") or line.startswith("TER"):
                     outfile.write(line)
-                elif line.strip() == "END":
+                elif keep_hetatm and line.startswith("HETATM"):
                     outfile.write(line)
-                    break
+            # A single terminal END; intermediate END/ENDMDL markers are dropped
+            # so downstream parsers never truncate at an early end-of-file marker.
+            outfile.write("END\n")
         return pdb_clean
     except Exception as e:
         raise MutationError(f"Failed to clean PDB file '{pdb_file}': {e}") from e

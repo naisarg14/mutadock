@@ -19,6 +19,7 @@
 
 
 import logging
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -95,9 +96,10 @@ def read_pdb_file(file_path: str) -> list[dict[str, Any]]:
 
     try:
         atoms = []
-        pattern = r"^ATOM\s+(\d+)\s+([A-Z]+)\s+([A-Z]{2,3})\s+([A-Z]?)\s*(\d+)\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(\d+\.\d{1,2})\s+(\d+\.\d{1,3})(?:\s+(\d+\.\d{1,3}))?\s+[A-Z]$"
+        pattern = r"^(?:ATOM|HETATM)\s+(\d+)\s+([A-Z]+)\s+([A-Z]{2,3})\s+([A-Z]?)\s*(\d+)\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(-?\d+\.\d{3})\s+(\d+\.\d{1,2})\s+(\d+\.\d{1,3})(?:\s+(\d+\.\d{1,3}))?\s+[A-Z]$"
         with open(file_path) as file:
             for line in file:
+                match = None
                 if line.startswith(("ATOM", "HETATM")):
                     match = re.match(pattern, line)
                 if match:
@@ -136,6 +138,10 @@ def calculate_geometric_center(pdb_file: str) -> tuple[float, float, float]:
     """
     atoms = read_pdb_file(pdb_file)
     num_atoms = len(atoms)
+    if num_atoms == 0:
+        raise PDBFileError(
+            f"Cannot compute geometric center: no atoms found in '{pdb_file}'."
+        )
     x_sum = sum(atom["x"] for atom in atoms)
     y_sum = sum(atom["y"] for atom in atoms)
     z_sum = sum(atom["z"] for atom in atoms)
@@ -160,6 +166,8 @@ def calculate_radius(pdb_file: str) -> float:
     atoms = read_pdb_file(pdb_file)
 
     num_atoms = len(atoms)
+    if num_atoms == 0:
+        raise PDBFileError(f"Cannot compute radius: no atoms found in '{pdb_file}'.")
     cx = sum(a["x"] for a in atoms) / num_atoms
     cy = sum(a["y"] for a in atoms) / num_atoms
     cz = sum(a["z"] for a in atoms) / num_atoms
@@ -192,12 +200,12 @@ def vina_split(input_file: str, output_file: Optional[str] = None) -> tuple[floa
         affinity in kcal/mol.
     """
     try:
-        import sys
+        import re
 
         from meeko import PDBQTMolecule, RDKitMolCreate
     except ModuleNotFoundError:
         msg = "Error with importing modules for preparing ligand files for Docking.\n"
-        msg += "Easaies way to fix this is to install meeko using the following command:\n\n"
+        msg += "Easiest way to fix this is to install meeko using the following command:\n\n"
         msg += "python -m pip install meeko\n"
         msg += "If you already have meeko installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
@@ -208,17 +216,24 @@ def vina_split(input_file: str, output_file: Optional[str] = None) -> tuple[floa
         output_file = input_file.replace(".pdbqt", "_ligand_1.sdf")
 
     pdbqt_string = ""
+    score = None
     with open(input_file) as infile:
         for line in infile:
             if "vina result" in line.lower():
-                score = [
-                    float(x)
-                    for x in line.split()
-                    if x.replace(".", "", 1).replace("-", "", 1).isdigit()
-                ][0]
+                number_match = re.search(
+                    r"vina result:\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)",
+                    line,
+                    re.IGNORECASE,
+                )
+                if number_match:
+                    score = float(number_match.group(1))
             pdbqt_string += line
             if line.startswith("ENDMDL"):
                 break
+
+    if score is None:
+        raise DockingError(f"No 'VINA RESULT' affinity found in '{input_file}'.")
+
     molecule = PDBQTMolecule(pdbqt_string)
     sdf_string, failures = RDKitMolCreate.write_sd_string(molecule)
 
@@ -257,7 +272,7 @@ def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> str:
         from rdkit import Chem
     except ModuleNotFoundError:
         msg = "Error with importing modules for preparing ligand files for Docking.\n"
-        msg += "Easaies way to fix this is to install meeko and rdkit using the following command:\n\n"
+        msg += "Easiest way to fix this is to install meeko and rdkit using the following command:\n\n"
         msg += "python -m pip install meeko rdkit\n"
         msg += "If you already have meeko and rdkit installed, please check the installation.\n"
         msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
@@ -391,10 +406,15 @@ def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
         try:
             with open(csv_file) as lc:
                 lines = [ln.strip() for ln in lc.readlines() if ln.strip()]
-            if lines:
-                last = lines[-1]
-                first_field = last.split(",")[0]
-                count = int(first_field) + 1
+            # Walk backwards to the most recent data row, skipping the header
+            # row (whose first field is not an integer).
+            for line in reversed(lines):
+                first_field = line.split(",")[0]
+                try:
+                    count = int(first_field) + 1
+                    break
+                except ValueError:
+                    continue
         except Exception:
             count = 1
 
@@ -402,6 +422,8 @@ def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
     try:
         with open(csv_file, "a", newline="") as out:
             writer = csv.writer(out)
+            if not file_exists:
+                writer.writerow(["sr", "name", "affinity"])
             writer.writerow([count, name, score])
     except Exception as e:
         raise DockingError(f"Failed to write to CSV '{csv_file}': {e}") from e
@@ -432,7 +454,7 @@ def read_config(
             for line in file:
                 line = line.strip()
                 if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=")
+                    key, value = line.split("=", 1)
                     config[key.strip()] = value.strip()
 
         center = [
@@ -560,7 +582,7 @@ def dock_vina(
     vina_dock_script = Path(__file__).parent / "vina_dock.py"
 
     commands = [
-        "python3",
+        sys.executable,
         str(vina_dock_script),
         "--receptor",
         receptor,
@@ -583,8 +605,7 @@ def dock_vina(
         "--n_poses_write",
         str(n_poses_write),
     ]
-    if not overwrite:
-        commands.append("--nooverwrite")
+    commands.append("--overwrite" if overwrite else "--no-overwrite")
     with open(log_file, "w+") as lfile:
         result = subprocess.run(commands, stdout=lfile, stderr=lfile, text=True)
 
