@@ -112,8 +112,14 @@ md_dock -r 4QJR_modified_mutants.txt -l ligands.txt -c config.txt
 
 ```bash
 md_mutate -i protein.pdb
-md_mutate -h   # all options
+md_mutate --pdb-id 4QJR   # fetch the structure from RCSB instead of -i
+md_mutate -h              # all options
 ```
+
+Provide exactly one of `-i/--input` (a local `.pdb`/`.cif` file) or `--pdb-id` (a
+4-character RCSB accession, downloaded automatically). `md_mutate` also warns when
+the input contains multiple models, alternate conformations (altlocs), or
+insertion codes, since these affect residue numbering.
 
 #### Mutation Output
 

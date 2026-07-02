@@ -20,6 +20,7 @@
 
 import logging
 import os
+import re
 import shutil
 import urllib.request
 from contextlib import contextmanager
@@ -32,6 +33,7 @@ from .exceptions import MutationError
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 NCBI_MATRIX_URL = "https://ftp.ncbi.nih.gov/blast/matrices/"
+RCSB_PDB_URL = "https://files.rcsb.org/download/{pdb_id}.pdb"
 
 # Configure logging
 logging.basicConfig(
@@ -264,6 +266,143 @@ def convert_cif_pdb(cif_file: str, pdb_file: Optional[str] = None) -> str:
         raise MutationError(f"Failed to convert CIF to PDB '{cif_file}': {e}") from e
 
 
+def fetch_pdb(pdb_id: str, dest_dir: Optional[str | Path] = None) -> str:
+    """Download a structure from RCSB by its 4-character PDB ID.
+
+    Args:
+        pdb_id: A 4-character PDB accession (e.g. ``"4QJR"``); case-insensitive.
+        dest_dir: Directory to save ``<PDB_ID>.pdb`` into.  Defaults to the
+            current working directory.  An existing file is reused (not
+            re-downloaded).
+
+    Returns:
+        Path to the downloaded (or already-present) ``.pdb`` file.
+
+    Raises:
+        MutationError: If *pdb_id* is malformed or the download fails.
+    """
+    pdb_id = pdb_id.strip().upper()
+    if not re.fullmatch(r"[0-9A-Z]{4}", pdb_id):
+        raise MutationError(
+            f"Invalid PDB ID '{pdb_id}': expected a 4-character code such as 4QJR."
+        )
+    directory = Path(dest_dir) if dest_dir else Path.cwd()
+    directory.mkdir(parents=True, exist_ok=True)
+    dest = directory / f"{pdb_id}.pdb"
+    if dest.is_file():
+        logger.info("PDB %s already present at '%s'; skipping download.", pdb_id, dest)
+        return str(dest)
+
+    url = RCSB_PDB_URL.format(pdb_id=pdb_id)
+    logger.info("Fetching PDB %s from %s ...", pdb_id, url)
+    try:
+        urllib.request.urlretrieve(url, dest)
+    except Exception as e:
+        raise MutationError(
+            f"Failed to fetch PDB '{pdb_id}' from RCSB ({url}): {e}"
+        ) from e
+    logger.info("Saved to '%s'.", dest)
+    return str(dest)
+
+
+def structure_warnings(pdb_file: str) -> list[str]:
+    """Detect structural features that silently affect residue numbering.
+
+    Scans a PDB file for multi-model ensembles (e.g. NMR), alternate location
+    indicators (altlocs), and residue insertion codes — each of which can make
+    the integer residue numbering used for mutations ambiguous.  Must be run on
+    the *original* structure: ``clean_pdb`` drops ``MODEL`` records, so a cleaned
+    file would never report a multi-model warning.
+
+    Args:
+        pdb_file: Path to the PDB file to inspect.
+
+    Returns:
+        A (possibly empty) list of human-readable warning strings.
+    """
+    model_count = 0
+    altlocs: set[str] = set()
+    insertion_residues: set[tuple[str, str, str]] = set()
+    try:
+        with open(pdb_file) as f:
+            for line in f:
+                if line.startswith("MODEL"):
+                    model_count += 1
+                elif line.startswith(("ATOM", "HETATM")):
+                    altloc = line[16:17].strip()
+                    if altloc:
+                        altlocs.add(altloc)
+                    icode = line[26:27].strip()
+                    if icode:
+                        chain = line[21:22]
+                        resseq = line[22:26].strip()
+                        insertion_residues.add((chain, resseq, icode))
+    except OSError:
+        return []
+
+    warnings: list[str] = []
+    if model_count > 1:
+        warnings.append(
+            f"Structure contains {model_count} models (e.g. an NMR ensemble); "
+            "residue numbering can differ between models and only one is scored."
+        )
+    if altlocs:
+        warnings.append(
+            f"Structure contains alternate location indicators "
+            f"({', '.join(sorted(altlocs))}); alternate conformations may affect "
+            "mutation scoring."
+        )
+    if insertion_residues:
+        warnings.append(
+            f"Structure contains {len(insertion_residues)} residue(s) with "
+            "insertion codes; insertion codes are not reflected in the integer "
+            "residue numbering used for mutations."
+        )
+    return warnings
+
+
+def pose_residue_map(pose: object) -> dict[str, list[int]]:
+    """Return ``{chain: [residue numbers]}`` for a PyRosetta pose.
+
+    Uses the pose's PDB info so the numbers match the PDB numbering that
+    ``pdb2pose`` expects.  Used to build actionable "residue not found" errors.
+    """
+    info = pose.pdb_info()  # type: ignore[attr-defined]
+    residues: dict[str, list[int]] = {}
+    for i in range(1, pose.total_residue() + 1):  # type: ignore[attr-defined]
+        residues.setdefault(info.chain(i), []).append(info.number(i))
+    return residues
+
+
+def format_missing_residue(
+    available: dict[str, list[int]], chain: str, position: int, pdb_file: str
+) -> str:
+    """Build an actionable message for a residue that isn't in the structure.
+
+    Args:
+        available: ``{chain: [residue numbers]}`` present in the structure.
+        chain: Requested chain ID.
+        position: Requested residue number.
+        pdb_file: Structure path, for context in the message.
+
+    Returns:
+        A message listing available chains (if the chain is absent) or the
+        numbering span of the requested chain (if only the position is absent).
+    """
+    if chain not in available:
+        chains = ", ".join(sorted(available)) or "none"
+        return (
+            f"Chain '{chain}' not found in '{pdb_file}'. "
+            f"Available chains: {chains}."
+        )
+    positions = available[chain]
+    lo, hi = min(positions), max(positions)
+    return (
+        f"Residue {position} not found in chain '{chain}' of '{pdb_file}'. "
+        f"Chain '{chain}' spans positions {lo}-{hi} ({len(positions)} residues)."
+    )
+
+
 def load_matrix(
     file_path: str | Path = DATA_DIR / "PAM250",
 ) -> dict[str, dict[str, int]]:
@@ -404,7 +543,9 @@ def mutate_and_score(
 
     pose_position: int = pose.pdb_info().pdb2pose(chain, aa_number)
     if pose_position == 0:
-        raise MutationError(f"Residue {chain}{aa_number} not found in '{pdb_file}'.")
+        raise MutationError(
+            format_missing_residue(pose_residue_map(pose), chain, aa_number, pdb_file)
+        )
 
     mut_1: Optional[str] = get_1(mutated_aa) if check_3(mutated_aa) else mutated_aa
     if mut_1 is None:

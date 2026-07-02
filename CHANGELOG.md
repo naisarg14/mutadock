@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `md_mutate --pdb-id <ID>` fetches a structure directly from RCSB (e.g. `--pdb-id 4QJR`) instead of requiring a local file with `-i`; the two are mutually exclusive and one is required
+- `fetch_pdb()` helper in `mutation/helpers.py` (downloads `https://files.rcsb.org/download/<ID>.pdb`, validates the 4-character code, reuses an already-downloaded file)
+- Actionable "residue not found" errors: `md_mutate` now reports the available chains (when the chain is absent) or the chain's residue-numbering span (when only the position is absent) instead of a bare `Residue A386 not found`
+- `md_mutate` now warns when the input structure has multiple models (e.g. an NMR ensemble), alternate location indicators, or residue insertion codes — features that silently affect residue numbering
 - Test suite with 131 tests across mutation and docking modules (45.45% coverage)
 - Regression tests for every correctness fix below (32 new tests): `sort_csv` direction/column handling, first-residue enumeration, non-standard-residue skipping, `clean_pdb` multi-model handling, triple-ddG append predicate, `read_pdb_file` ATOM/HETATM parsing, zero-atom guards, `read_config` values containing `=`, docking-CSV header, `overwrite` flag round-trip, and `.cif`/auto-box docking naming
 - `load_matrix()`, `download_matrix()`, `resolve_matrix()` helpers in `mutation/helpers.py` for reading any NCBI-format substitution matrix file

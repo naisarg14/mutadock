@@ -33,12 +33,20 @@ try:
     from .ddg_calc import calc_ddg
     from .ddg_calc_double import calc_double_ddg
     from .ddg_calc_triple import calc_triple_ddg
+    from .exceptions import MutationError
     from .generate_mutants import (
         generate_double_mutation,
         generate_single_mutation,
         generate_triple_mutation,
     )
-    from .helpers import backup, clean_pdb, file_info, permutations
+    from .helpers import (
+        backup,
+        clean_pdb,
+        fetch_pdb,
+        file_info,
+        permutations,
+        structure_warnings,
+    )
 except ImportError:
     src_dir = Path(__file__).resolve().parents[2]
     if str(src_dir) not in sys.path:
@@ -49,12 +57,20 @@ except ImportError:
     from mutadock.mutation.ddg_calc import calc_ddg
     from mutadock.mutation.ddg_calc_double import calc_double_ddg
     from mutadock.mutation.ddg_calc_triple import calc_triple_ddg
+    from mutadock.mutation.exceptions import MutationError
     from mutadock.mutation.generate_mutants import (
         generate_double_mutation,
         generate_single_mutation,
         generate_triple_mutation,
     )
-    from mutadock.mutation.helpers import backup, clean_pdb, file_info, permutations
+    from mutadock.mutation.helpers import (
+        backup,
+        clean_pdb,
+        fetch_pdb,
+        file_info,
+        permutations,
+        structure_warnings,
+    )
 
 # Configure logging
 logging.basicConfig(
@@ -94,6 +110,12 @@ def np_mutation() -> None:
         append,
         quiet,
     ) = get_inputs()
+
+    # Warn about structural features that affect residue numbering.  Run on the
+    # original file: clean_pdb drops MODEL records, so multi-model ensembles must
+    # be detected here, before cleaning.
+    for warning in structure_warnings(full_pdb_path):
+        logger.warning(warning)
 
     # Clean the PDB file
     if not quiet:
@@ -313,12 +335,18 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
         description=None,
         epilog="Part of mutadock library. Written by Naisarg Patel (https://github.com/naisarg14)",
     )
-    parser.add_argument(
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         "-i",
         "--input",
-        help="PDB File for predicting and generating mutations",
+        help="PDB/CIF file for predicting and generating mutations",
         metavar="PDB",
-        required=True,
+    )
+    source.add_argument(
+        "--pdb-id",
+        dest="pdb_id",
+        help="4-character RCSB PDB ID to fetch instead of -i (e.g. 4QJR)",
+        metavar="ID",
     )
     parser.add_argument(
         "-s",
@@ -377,24 +405,28 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
 
     args = parser.parse_args()
 
-    pdb_file = args.input
-
-    pdb_path = Path(pdb_file)
-    if not pdb_path.is_absolute():
-        logger.info("Assuming current directory as root since path not specified.")
-        full_pdb_path = Path.cwd() / pdb_file
+    if args.pdb_id:
+        try:
+            full_pdb_path = Path(fetch_pdb(args.pdb_id))
+        except MutationError as err:
+            sys.exit(str(err))
     else:
-        full_pdb_path = pdb_path
+        pdb_path = Path(args.input)
+        if not pdb_path.is_absolute():
+            logger.info("Assuming current directory as root since path not specified.")
+            full_pdb_path = Path.cwd() / args.input
+        else:
+            full_pdb_path = pdb_path
 
-    if not full_pdb_path.is_file():
-        sys.exit(
-            "No such file found in current directory, enter full path for other directories."
-        )
+        if not full_pdb_path.is_file():
+            sys.exit(
+                "No such file found in current directory, enter full path for other directories."
+            )
 
-    if full_pdb_path.suffix not in (".pdb", ".cif"):
-        sys.exit(
-            "Given file is not a PDB/CIF file, input should be a .pdb or .cif file."
-        )
+        if full_pdb_path.suffix not in (".pdb", ".cif"):
+            sys.exit(
+                "Given file is not a PDB/CIF file, input should be a .pdb or .cif file."
+            )
 
     return (
         str(full_pdb_path),

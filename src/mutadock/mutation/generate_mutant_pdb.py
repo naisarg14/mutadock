@@ -243,7 +243,9 @@ def generate_pdb(
             pose_position = pose.pdb_info().pdb2pose(chain, position)
             if pose_position == 0:
                 raise MutationError(
-                    f"Residue {chain}{position} not found in '{pdb_file}'."
+                    helpers.format_missing_residue(
+                        helpers.pose_residue_map(pose), chain, position, pdb_file
+                    )
                 )
 
             mutate_residue(pose, pose_position, new_aa1)
@@ -268,7 +270,9 @@ def generate_pdb(
             pose_position = pose.pdb_info().pdb2pose(chain, position)
             if pose_position == 0:
                 raise MutationError(
-                    f"Residue {chain}{position} not found in '{pdb_file}'."
+                    helpers.format_missing_residue(
+                        helpers.pose_residue_map(pose), chain, position, pdb_file
+                    )
                 )
 
             mutate_residue(pose, pose_position, new_aa1)

@@ -11,8 +11,17 @@ Run from the project root:
 """
 
 from pathlib import Path
+from unittest.mock import patch
 
-from mutadock.mutation.helpers import clean_pdb
+import pytest
+
+from mutadock.mutation.exceptions import MutationError
+from mutadock.mutation.helpers import (
+    clean_pdb,
+    fetch_pdb,
+    format_missing_residue,
+    structure_warnings,
+)
 
 # ---------------------------------------------------------------------------
 # Synthetic PDB fixtures
@@ -134,3 +143,121 @@ def test_default_output_path_and_header(tmp_path: Path):
     assert cleaned.startswith("REMARK This file was cleaned")
     assert len(_atom_lines(cleaned)) == 1
     assert cleaned.rstrip().endswith("END")
+
+
+# ---------------------------------------------------------------------------
+# 3.4: fetch_pdb — fetch a structure from RCSB by PDB ID
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad_id", ["AB", "toolong", "12-4", ""])
+def test_fetch_pdb_rejects_invalid_id(bad_id):
+    # Malformed IDs must be rejected *before* any network access.
+    with pytest.raises(MutationError, match="Invalid PDB ID"):
+        fetch_pdb(bad_id)
+
+
+def test_fetch_pdb_downloads_when_absent(tmp_path: Path):
+    def fake_urlretrieve(url, dest):
+        Path(dest).write_text("ATOM  ...\nEND\n")
+
+    with patch(
+        "mutadock.mutation.helpers.urllib.request.urlretrieve",
+        side_effect=fake_urlretrieve,
+    ) as mock_get:
+        out = fetch_pdb("4qjr", dest_dir=tmp_path)  # lower-case on purpose
+
+    # ID is upper-cased for the filename and the download happened once.
+    assert Path(out) == tmp_path / "4QJR.pdb"
+    assert Path(out).is_file()
+    mock_get.assert_called_once()
+    called_url = mock_get.call_args[0][0]
+    assert called_url == "https://files.rcsb.org/download/4QJR.pdb"
+
+
+def test_fetch_pdb_reuses_existing_file(tmp_path: Path):
+    existing = tmp_path / "4QJR.pdb"
+    existing.write_text("ATOM  ...\nEND\n")
+
+    with patch("mutadock.mutation.helpers.urllib.request.urlretrieve") as mock_get:
+        out = fetch_pdb("4QJR", dest_dir=tmp_path)
+
+    assert Path(out) == existing
+    mock_get.assert_not_called()  # cached file must not be re-downloaded
+
+
+# ---------------------------------------------------------------------------
+# 3.4: structure_warnings — flag features that affect residue numbering
+# ---------------------------------------------------------------------------
+
+
+def _atom(serial=1, altloc=" ", icode=" ", chain="A", resseq=1, resname="MET"):
+    """Build a column-correct PDB ATOM line (altLoc col 17, iCode col 27)."""
+    return (
+        f"ATOM  {serial:>5} N   {altloc}{resname:>3} {chain}{resseq:>4}{icode}"
+        "   11.104  13.207  10.567  1.00  0.00           N\n"
+    )
+
+
+def _write(tmp_path: Path, name: str, text: str) -> str:
+    p = tmp_path / name
+    p.write_text(text)
+    return str(p)
+
+
+def test_structure_warnings_multi_model(tmp_path: Path):
+    pdb = _write(
+        tmp_path,
+        "nmr.pdb",
+        "MODEL        1\n" + _atom(1) + "ENDMDL\n"
+        "MODEL        2\n" + _atom(2) + "ENDMDL\nEND\n",
+    )
+    warnings = structure_warnings(pdb)
+    assert any("2 models" in w for w in warnings)
+
+
+def test_structure_warnings_altloc(tmp_path: Path):
+    pdb = _write(
+        tmp_path, "alt.pdb", _atom(1, altloc="A") + _atom(2, altloc="B") + "END\n"
+    )
+    warnings = structure_warnings(pdb)
+    assert any("alternate location" in w for w in warnings)
+
+
+def test_structure_warnings_insertion_code_counts_residues(tmp_path: Path):
+    # Two atoms of the SAME insertion-coded residue -> counted as one residue.
+    pdb = _write(
+        tmp_path,
+        "ins.pdb",
+        _atom(1, icode="A", resseq=52) + _atom(2, icode="A", resseq=52) + "END\n",
+    )
+    warnings = structure_warnings(pdb)
+    assert any("1 residue(s) with insertion codes" in w for w in warnings)
+
+
+def test_structure_warnings_clean_structure(tmp_path: Path):
+    pdb = _write(tmp_path, "clean.pdb", _atom(1) + _atom(2, resseq=2) + "END\n")
+    assert structure_warnings(pdb) == []
+
+
+def test_structure_warnings_missing_file_is_silent(tmp_path: Path):
+    assert structure_warnings(str(tmp_path / "does_not_exist.pdb")) == []
+
+
+# ---------------------------------------------------------------------------
+# 3.4: format_missing_residue — actionable "not found" messages
+# ---------------------------------------------------------------------------
+
+
+def test_format_missing_residue_lists_chains_when_chain_absent():
+    available = {"A": [1, 2, 3], "B": [10, 11]}
+    msg = format_missing_residue(available, "Z", 5, "prot.pdb")
+    assert "Chain 'Z' not found" in msg
+    assert "A, B" in msg  # available chains listed, sorted
+
+
+def test_format_missing_residue_shows_span_when_position_absent():
+    available = {"A": [218, 219, 220, 461]}
+    msg = format_missing_residue(available, "A", 999, "prot.pdb")
+    assert "Residue 999 not found in chain 'A'" in msg
+    assert "218-461" in msg  # numbering span reported

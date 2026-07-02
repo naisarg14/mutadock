@@ -164,5 +164,38 @@ class TestNoAppendFlag(unittest.TestCase):
         self.assertIs(self._get_append(["-i", str(self.pdb), "--no-append"]), False)
 
 
+# ---------------------------------------------------------------------------
+# 3.4: --pdb-id fetches from RCSB instead of -i
+# ---------------------------------------------------------------------------
+
+
+class TestPdbIdArg(unittest.TestCase):
+
+    _PATH_INDEX = 0  # position of the resolved PDB path in get_inputs()'s tuple
+
+    def _get_inputs(self, argv: list[str]):
+        with patch.object(sys, "argv", ["np_mutation", *argv]):
+            return np_mutation.get_inputs()
+
+    def test_pdb_id_resolves_to_fetched_path(self):
+        """--pdb-id 4QJR fetches from RCSB and returns the downloaded path."""
+        with patch.object(
+            np_mutation, "fetch_pdb", return_value="/downloads/4QJR.pdb"
+        ) as mock_fetch:
+            result = self._get_inputs(["--pdb-id", "4QJR"])
+        mock_fetch.assert_called_once_with("4QJR")
+        self.assertEqual(result[self._PATH_INDEX], "/downloads/4QJR.pdb")
+
+    def test_input_and_pdb_id_are_mutually_exclusive(self):
+        """Supplying both -i and --pdb-id is an argparse error (exit)."""
+        with self.assertRaises(SystemExit):
+            self._get_inputs(["-i", "prot.pdb", "--pdb-id", "4QJR"])
+
+    def test_one_of_input_or_pdb_id_is_required(self):
+        """Supplying neither -i nor --pdb-id is an argparse error (exit)."""
+        with self.assertRaises(SystemExit):
+            self._get_inputs([])
+
+
 if __name__ == "__main__":
     unittest.main()
