@@ -63,6 +63,25 @@ conda install -c conda-forge pdbfixer openmm
 
 The `data/` directory in this repository contains a sample receptor (`4QJR.cif`) and ligand (`Ligand.sdf`) you can use to try the workflow immediately.
 
+### The 30-second demo: `md_quick`
+
+One command takes a **PDB ID**, a **mutation**, and a **ligand code**, and gives you a ΔΔG plus a docked pose — fetching the structure from RCSB and the ligand from PubChem automatically:
+
+```bash
+md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib
+```
+
+```
+  Mutation : ASN-A386-HIS
+  ΔΔG      : -27.30 REU (negative = stabilizing)
+  Affinity : -5.66 kcal/mol
+  Report   : mdquick_4QJR/reports/report.html
+```
+
+It fetches + cleans the structure, computes the ΔΔG for that single mutation, builds the mutant, fetches the ligand, finds the pocket with AutoSite (or pass `-c config.txt`), docks, and writes the standard `reports/` bundle. Use `-i protein.pdb` for a local structure, `--ligand-file lig.sdf` for a local ligand, or `--ligand-code 2244` / `cid:5291` / `name:aspirin` for PubChem. Requires the `autosite` binary (ADFRsuite) on PATH when no config is given.
+
+The staged tools below give you full control over each step.
+
 ### 1. Generate mutation candidates
 
 ```bash
@@ -112,14 +131,20 @@ md_dock -r 4QJR_modified_mutants.txt -l ligands.txt -c config.txt
 
 ```bash
 md_mutate -i protein.pdb
-md_mutate --pdb-id 4QJR   # fetch the structure from RCSB instead of -i
-md_mutate -h              # all options
+md_mutate --pdb-id 4QJR              # fetch the structure from RCSB instead of -i
+md_mutate -i protein.pdb -o results/ # write all outputs to results/
+md_mutate -h                         # all options
 ```
 
 Provide exactly one of `-i/--input` (a local `.pdb`/`.cif` file) or `--pdb-id` (a
 4-character RCSB accession, downloaded automatically). `md_mutate` also warns when
 the input contains multiple models, alternate conformations (altlocs), or
 insertion codes, since these affect residue numbering.
+
+By default every output file is written next to the input structure. Pass
+`-o/--output-dir DIR` to collect them in `DIR` instead (created if absent); the
+paths recorded in `*_mutants.txt` point into `DIR`, so they remain valid input
+for `md_dock`.
 
 #### Mutation Output
 
@@ -134,6 +159,26 @@ insertion codes, since these affect residue numbering.
 | 7 | `protein_modified_triple_ddg.csv` | Triple-mutation ΔΔG combinations |
 | 8 | `protein_modified_triple_ddg_sorted.csv` | File 7 sorted |
 | 9 | `protein_modified_mutants.txt` | List of mutated PDB paths (direct input for `md_dock`) |
+
+#### ΔΔG rigor and units (read this before trusting the numbers)
+
+ΔΔG is computed as `score(mutant) − score(wild-type self-mutation reference)`, where **both** sides run the identical repack(+minimization) protocol — so a null WT→WT mutation scores ≈ 0 and the values are not biased toward "stabilizing."
+
+- **Units:** `ddG_value` is in **Rosetta Energy Units (REU), not kcal/mol.** A `ddG_kcal` column is also written, and reports show both. REU ≈ but ≠ kcal/mol.
+- **Scaling factor:** the REU→kcal/mol factor is **`REU_TO_KCAL_SCALE` in `src/mutadock/mutation/predict_ddG.py`** (default `0.34`, ≈ 1/2.94; the ref2015 `cartesian_ddg` convention, Park et al. 2016). **To change it, edit that constant** or pass `--reu-to-kcal FACTOR` per run.
+- **Protocol (`--protocol`, default `min`):** the recorded protocol is written to a `ddG_protocol` column, and reports flag screening-only runs.
+
+  ```bash
+  md_mutate -i protein.pdb                       # default: 'min' = repack + backbone/side-chain minimization (reliable)
+  md_mutate -i protein.pdb --protocol cartesian  # ref2015_cart + Cartesian minimization (most accurate, cartesian_ddg style; slowest)
+  md_mutate -i protein.pdb --protocol fast        # single repack, NO minimization — SCREENING ONLY (see warning below)
+  md_mutate -i protein.pdb --replicates 3         # mean ± SD over 3 stochastic repacks (adds ddG_sd, n_replicates)
+  md_mutate -i protein.pdb --pack-radius 10 --reu-to-kcal 0.29
+  ```
+
+  > **Why `min` is the default, not `fast`:** a single repack with **no minimization** can leave clashes it can't relieve — and because ΔΔG uses a wild-type self-reference, a failed WT repack can make a *destabilizing* mutation rank as the top *stabilizer* (observed: a site flipping from +69 REU to −375 REU). Minimization relieves those clashes and fixes it. `--protocol fast` (~1 min/proteome vs ~12 min for `min`, ~30 min for `cartesian`) is retained for **screening only** and its reports carry a "SCREENING ONLY — values unreliable" banner.
+  >
+  > For research-grade numbers prefer `--protocol cartesian` and `--replicates 3`+. The cartesian_ddg protocol is cited in Park, H. *et al.* (2016) *J. Chem. Theory Comput.* **12**(12):6201–6212, doi:10.1021/acs.jctc.6b00819.
 
 ### Generating Mutant PDB Files
 
@@ -181,10 +226,16 @@ Output files are named `{stem}_{WTAA}-{CHAIN}{POS}-{NEWAA}.pdb` (e.g. `protein_A
 
 ```bash
 md_dock -r receptors.txt -l ligands.txt -c config.txt
+md_dock -r receptors.txt -l ligands.txt -c config.txt -o results/  # collect outputs in results/
 md_dock -h   # all options
 ```
 
 Every receptor in `receptors.txt` is docked against every ligand in `ligands.txt`. Receptors can be `.pdb` or `.cif` — they are fixed and converted to PDBQT automatically.
+
+By default docking outputs go to an `out/` folder next to each receptor. Pass
+`-o/--output-dir DIR` to collect poses, logs, `docking_results.csv`, and the
+`*_completed.txt` resume file in a single `DIR` instead. Prepared PDBQT files and
+AutoSite caches still live next to their inputs so they can be reused across runs.
 
 #### Docking Output
 
@@ -197,11 +248,55 @@ Every receptor in `receptors.txt` is docked against every ligand in `ligands.txt
 | 5 | Output SDF | Best pose as SDF for visualization |
 | 6 | `docking_results.csv` | All affinities tabulated for easy analysis |
 
+### Reports
+
+Every `md_mutate` and `md_dock` run automatically produces a **self-contained
+report** so you don't have to open the raw CSVs by hand:
+
+- `report.html` — a single file (opens offline / emails cleanly) with a ΔΔG
+  distribution, a top-stabilizing-mutations table + chart, a docking-affinity
+  chart + table, and an **interactive 3D viewer of the top mutant pose** (NGL,
+  inlined).
+- `report.pptx` — the same content as presentation slides.
+- `figures/` — each chart also saved as a standalone PNG, ready to drop into
+  your own slides or manuscript.
+
+Everything is collected in a **`reports/` folder** inside the run's output
+directory:
+
+```
+results/reports/
+├── figures/
+│   ├── ddg_distribution.png
+│   ├── top_mutations.png
+│   ├── docking_affinity.png
+│   └── top_mutant_structure.png
+├── report.html
+└── report.pptx
+```
+
+Add `--no-report` to skip report generation. Rebuild (or build from an older
+run) at any time with `md_report`:
+
+```bash
+md_report -d results/                 # writes results/reports/{report.html,report.pptx,figures/}
+md_report -d results/ --html-only     # HTML only
+md_report -d results/ -o custom_dir/ --top 20   # write reports into custom_dir/ instead
+md_report -h
+```
+
+Using the **same** `-o/--output-dir` for `md_mutate` and then `md_dock` yields a
+single combined report showing both ΔΔG and docking affinities.
+
+Reporting needs `matplotlib`, `python-pptx`, and `jinja2` (installed
+automatically with `mutadock`).
+
 
 ## CLI Reference
 
 | Command | Description |
 |---------|-------------|
+| `md_quick` | One-shot demo: PDB ID + mutation + ligand code → ΔΔG + docked pose + report |
 | `md_mutate` | Full mutation + ΔΔG pipeline from a PDB/CIF file |
 | `md_dock` | Batch receptor–ligand docking |
 | `md_vina_dock` | Direct AutoDock Vina CLI wrapper |
@@ -211,6 +306,7 @@ Every receptor in `receptors.txt` is docked against every ligand in `ligands.txt
 | `md_ddg_double` | Calculate double-mutation ΔΔG combinations |
 | `md_ddg_triple` | Calculate triple-mutation ΔΔG combinations |
 | `md_generate_pdb` | Generate mutant PDB file(s) from a single mutation or a CSV list |
+| `md_report` | Build a self-contained HTML + PPTX report from a run directory |
 
 
 ## Python API

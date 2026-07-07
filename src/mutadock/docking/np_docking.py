@@ -104,9 +104,17 @@ def np_docking() -> None:
     CLI entry point for ``md_dock``.
     """
     start_time = time.time()
-    receptors, ligands, config, autosite, quiet, completed_name, ignore_existing = (
-        prepare_inputs()
-    )
+    (
+        receptors,
+        ligands,
+        config,
+        autosite,
+        quiet,
+        completed_name,
+        ignore_existing,
+        output_dir_arg,
+        no_report,
+    ) = prepare_inputs()
 
     center: Optional[list[float]] = None
     box_size: Optional[list[float]] = None
@@ -195,14 +203,25 @@ def np_docking() -> None:
         receptor_path = Path(receptor).resolve()
         ligand_path = Path(ligand).resolve()
 
-        output_dir = receptor_path.parent / "out"
+        # Docking results go to --output-dir when given, otherwise to a per-
+        # receptor "out" folder (unchanged default).  Prepared PDBQT and
+        # AutoSite caches always stay next to their inputs.
+        if output_dir_arg is not None:
+            output_dir = output_dir_arg
+        else:
+            output_dir = receptor_path.parent / "out"
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        out_pdb = str(output_dir / f"{receptor_path.stem}_{ligand_path.stem}_out.pdb")
+        # Two distinct artifacts with honest extensions: the raw multi-pose
+        # Vina output is PDBQT; the extracted best pose is SDF.
+        stem = f"{receptor_path.stem}_{ligand_path.stem}_out"
+        out_pdbqt = str(output_dir / f"{stem}.pdbqt")
+        out_sdf = str(output_dir / f"{stem}.sdf")
         log_file = str(output_dir / f"{receptor_path.stem}_{ligand_path.stem}_log.txt")
         csv_file = str(output_dir / "docking_results.csv")
 
-        backup(out_pdb)
+        backup(out_pdbqt)
+        backup(out_sdf)
         backup(log_file)
 
         loop_center = center
@@ -312,7 +331,7 @@ def np_docking() -> None:
                     dock_vina(
                         prepared_receptor,
                         prepared_ligand,
-                        out_pdb,
+                        out_pdbqt,
                         log_file,
                         center=loop_center,
                         box_size=loop_box_size,
@@ -330,14 +349,13 @@ def np_docking() -> None:
                 logger.info("Docking Completed, writing log file")
 
             if not quiet:
-                logger.info("Getting the ligand 1 after docking")
-            ligand_1 = out_pdb.replace(".pdbqt", "_ligand_1.sdf")
+                logger.info("Extracting best pose after docking")
             with suppress_stdout():
-                score, _ = vina_split(input_file=out_pdb, output_file=out_pdb)
+                score, _ = vina_split(input_file=out_pdbqt, output_file=out_sdf)
             if not quiet:
                 logger.info("Adding affinity to CSV")
             try:
-                add_score_to_csv(out_pdb, csv_file, score)
+                add_score_to_csv(out_sdf, csv_file, score)
             except DockingError as e:
                 logger.error(
                     f"Error while adding affinity to CSV file {csv_file}\nError: {e}"
@@ -348,30 +366,58 @@ def np_docking() -> None:
 
             if not quiet:
                 logger.info(
-                    f"Docking completed, log file is {log_file}, ligand_1 is {ligand_1.replace('.pdbqt', '.sdf')}, docking affinity is {score}. \n"
+                    f"Docking completed, log file is {log_file}, best pose is {out_sdf}, docking affinity is {score}. \n"
                 )
 
         except EOFError:
             continue
 
-    end_time = time.time()
-    elapsed_time = (end_time - start_time) / 60
-
     if output_dir is not None:
         logger.info(f"All Outputs are saved in the folder: {output_dir}")
 
+    # Auto-generate the HTML + PPTX report from the docking results (and any
+    # mutation outputs sharing the same directory).  Best-effort: a report
+    # failure never fails the docking run.  ``output_dir`` is the directory that
+    # received docking_results.csv (the --output-dir when given, else the last
+    # receptor's out/ folder).
+    if not no_report and output_dir is not None:
+        if not quiet:
+            logger.info("Generating report (report.html + report.pptx)")
+        try:
+            from mutadock.report.report import generate_report
+
+            written = generate_report(str(output_dir), quiet=quiet)
+            for fmt, path in written.items():
+                logger.info(f"{fmt.upper()} report written: {path}")
+        except Exception as e:
+            logger.warning(
+                f"Report generation failed (docking outputs are unaffected): {e}"
+            )
+
+    end_time = time.time()
+    elapsed_time = (end_time - start_time) / 60
     logger.info(f"Completed in {elapsed_time:.2f} minutes!")
 
 
-def prepare_inputs() -> (
-    tuple[list[str], list[str], Optional[str], Optional[str], bool, str, bool]
-):
+def prepare_inputs() -> tuple[
+    list[str],
+    list[str],
+    Optional[str],
+    Optional[str],
+    bool,
+    str,
+    bool,
+    Optional[Path],
+    bool,
+]:
     """Parse CLI arguments for ``md_dock``.
 
     Returns:
         ``(receptors, ligands, config, autosite, quiet, completed_name,
-        ignore_existing)`` where *receptors* and *ligands* are lists of
-        absolute file paths read from the provided text files.
+        ignore_existing, output_dir, no_report)`` where *receptors* and
+        *ligands* are lists of absolute file paths read from the provided text
+        files, *output_dir* is the resolved ``--output-dir`` (``None`` if not
+        given), and *no_report* skips report generation when ``True``.
     """
     parser = argparse.ArgumentParser(
         prog="np_dock",
@@ -399,6 +445,16 @@ def prepare_inputs() -> (
         metavar="AUTOSITE",
     )
     parser.add_argument(
+        "-o",
+        "--output-dir",
+        dest="output_dir",
+        default=None,
+        help="Directory for docking outputs (poses, logs, docking_results.csv, "
+        "completed.txt). Default: an 'out' folder next to each receptor. "
+        "Prepared PDBQT and AutoSite caches always stay next to their inputs.",
+        metavar="DIR",
+    )
+    parser.add_argument(
         "-q",
         "--quiet",
         action="store_true",
@@ -409,6 +465,13 @@ def prepare_inputs() -> (
         "--ignore_existing",
         action="store_true",
         help="Run the Docking while ignoring existing files. All dockings will be performed again. (default: False).",
+    )
+    parser.add_argument(
+        "--no-report",
+        dest="no_report",
+        action="store_true",
+        help="Skip auto-generating the HTML + PPTX report after docking "
+        "(Default: generate report.html and report.pptx).",
     )
 
     args = parser.parse_args()
@@ -448,7 +511,14 @@ def prepare_inputs() -> (
     rec_path = Path(receptor_txt).resolve()
     lig_path = Path(ligand_txt).resolve()
     completed_file_name = f"{rec_path.stem}_{lig_path.stem}_completed.txt"
-    completed_name = str(rec_path.parent / completed_file_name)
+
+    if args.output_dir:
+        output_dir = Path(args.output_dir).expanduser().resolve()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        completed_name = str(output_dir / completed_file_name)
+    else:
+        output_dir = None
+        completed_name = str(rec_path.parent / completed_file_name)
 
     return (
         receptors,
@@ -458,6 +528,8 @@ def prepare_inputs() -> (
         args.quiet,
         completed_name,
         args.ignore_existing,
+        output_dir,
+        args.no_report,
     )
 
 

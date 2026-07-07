@@ -66,9 +66,14 @@ def _row(
 def _patch_calc_ddg(wt_score: float = 10.0, mut_score: float = 7.5):
     """Patch all pyrosetta deps *in ddg_calc's namespace* with real-valued mocks.
 
-    Yielded dict keys: pose, sfxn, mut_pose, get_fa_scorefxn.
-    Patches init, pose_from_pdb, get_fa_scorefxn, backup, in_directory.
+    Yielded dict keys: pose, sfxn, mut_pose, get_scorefxn.
+    Patches init, pose_from_pdb, predict_ddG.get_scorefxn, backup, in_directory.
     The caller is responsible for patching predict_ddG.mutate_residue.
+
+    ΔΔG = score(mutant) − score(wild-type self-mutation reference).  Within each
+    site the reference is scored first, then the mutant, so the first score
+    returns *wt_score* and subsequent scores return *mut_score* → ddG for a
+    single-row call is ``mut_score − wt_score``.
     """
     mock_pose = MagicMock(name="pose")
     pdb_info = MagicMock()
@@ -85,12 +90,14 @@ def _patch_calc_ddg(wt_score: float = 10.0, mut_score: float = 7.5):
         return wt_score if call_state["n"] == 1 else mut_score
 
     mock_sfxn.score.side_effect = _score
-    mock_get_fa = MagicMock(name="get_fa_scorefxn", return_value=mock_sfxn)
+    # calc_ddg now obtains its score function via predict_ddG.get_scorefxn(cartesian)
+    # (so the Cartesian protocol can swap in ref2015_cart), not get_fa_scorefxn.
+    mock_get_scorefxn = MagicMock(name="get_scorefxn", return_value=mock_sfxn)
 
     with (
         patch("mutadock.mutation.ddg_calc.init"),
         patch("mutadock.mutation.ddg_calc.pose_from_pdb", return_value=mock_pose),
-        patch("mutadock.mutation.ddg_calc.get_fa_scorefxn", mock_get_fa),
+        patch("mutadock.mutation.predict_ddG.get_scorefxn", mock_get_scorefxn),
         patch("mutadock.mutation.ddg_calc.backup"),
         patch("mutadock.mutation.ddg_calc.in_directory"),
     ):
@@ -98,7 +105,7 @@ def _patch_calc_ddg(wt_score: float = 10.0, mut_score: float = 7.5):
             "pose": mock_pose,
             "sfxn": mock_sfxn,
             "mut_pose": mock_mut_pose,
-            "get_fa_scorefxn": mock_get_fa,
+            "get_scorefxn": mock_get_scorefxn,
         }
 
 
@@ -250,8 +257,8 @@ class TestCalcDdg(unittest.TestCase):
     # Interactions with dependencies                                       #
     # ------------------------------------------------------------------ #
 
-    def test_get_fa_scorefxn_called_once(self):
-        """Score function is built once and reused for all mutations."""
+    def test_scorefxn_built_once(self):
+        """Score function is built once (via get_scorefxn) and reused."""
         input_rows = [_row(sr=i, position=i) for i in range(1, 4)]
         _write_input_csv(self.in_csv, input_rows)
         with _patch_calc_ddg() as mocks:
@@ -260,10 +267,16 @@ class TestCalcDdg(unittest.TestCase):
             ):
                 ddg_calc.calc_ddg(self.pdb_file, self.in_csv)
 
-        mocks["get_fa_scorefxn"].assert_called_once()
+        mocks["get_scorefxn"].assert_called_once()
 
-    def test_predict_ddg_mutate_residue_called_per_row(self):
-        """predict_ddG.mutate_residue must be called once per input row."""
+    def test_mutate_residue_called_for_reference_and_mutant(self):
+        """WT self-reference is computed once per site (cached), plus one mutant per row.
+
+        ``mutate_residue`` runs once for the wild-type self-mutation reference
+        and once per mutant.  The mocked ``pdb2pose`` maps every row to the same
+        pose position (5), so the reference is computed once and reused — giving
+        ``1 + N`` calls for N rows and exercising the per-site reference cache.
+        """
         input_rows = [_row(sr=i, position=i) for i in range(1, 4)]
         _write_input_csv(self.in_csv, input_rows)
         with _patch_calc_ddg() as mocks:
@@ -272,7 +285,7 @@ class TestCalcDdg(unittest.TestCase):
             ) as mock_mut:
                 ddg_calc.calc_ddg(self.pdb_file, self.in_csv)
 
-        self.assertEqual(mock_mut.call_count, len(input_rows))
+        self.assertEqual(mock_mut.call_count, 1 + len(input_rows))
 
     def test_backup_called_for_output_file(self):
         """backup() must be called for the output CSV path."""

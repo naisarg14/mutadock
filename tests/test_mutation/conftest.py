@@ -30,18 +30,26 @@ def _stub(name: str, **attrs) -> types.ModuleType:
 # ---------------------------------------------------------------------------
 # BioPython  (needed by csv_generator.py and helpers.py → convert_cif_pdb)
 # ---------------------------------------------------------------------------
-_pdb_parser_cls = MagicMock(name="PDBParser")
-_mmcif_parser_cls = MagicMock(name="MMCIFParser")
-_pdbio_cls = MagicMock(name="PDBIO")
+# Only stub BioPython when the real package is unavailable.  These tests patch
+# ``mutadock.mutation.csv_generator.PDBParser`` locally, so they pass either way;
+# stubbing unconditionally used to clobber ``sys.modules["Bio.PDB"]`` with a
+# MagicMock that leaked into sibling test packages (e.g. test_report, which does
+# real Cα parsing) and made their PDBParser return an empty structure.
+try:
+    import Bio.PDB  # noqa: F401
+except ImportError:
+    _pdb_parser_cls = MagicMock(name="PDBParser")
+    _mmcif_parser_cls = MagicMock(name="MMCIFParser")
+    _pdbio_cls = MagicMock(name="PDBIO")
 
-_bio = _stub("Bio")
-_bio_pdb = _stub(
-    "Bio.PDB",
-    PDBParser=_pdb_parser_cls,
-    MMCIFParser=_mmcif_parser_cls,
-    PDBIO=_pdbio_cls,
-)
-_bio.PDB = _bio_pdb
+    _bio = _stub("Bio")
+    _bio_pdb = _stub(
+        "Bio.PDB",
+        PDBParser=_pdb_parser_cls,
+        MMCIFParser=_mmcif_parser_cls,
+        PDBIO=_pdbio_cls,
+    )
+    _bio.PDB = _bio_pdb
 
 # ---------------------------------------------------------------------------
 # PyRosetta core  (needed by generate_mutants.py, ddg_calc.py, predict_ddG.py)
@@ -51,13 +59,22 @@ _pfp_mock = MagicMock(name="pose_from_pdb")
 _gfa_mock = MagicMock(name="get_fa_scorefxn")
 _pose_cls_mock = MagicMock(name="Pose")
 
+_csf_mock = MagicMock(name="create_score_function")
+
 _pyrosetta = _stub(
     "pyrosetta",
     init=_init_mock,
     pose_from_pdb=_pfp_mock,
     get_fa_scorefxn=_gfa_mock,
+    create_score_function=_csf_mock,
     Pose=_pose_cls_mock,
-    __all__=["init", "pose_from_pdb", "get_fa_scorefxn", "Pose"],
+    __all__=[
+        "init",
+        "pose_from_pdb",
+        "get_fa_scorefxn",
+        "create_score_function",
+        "Pose",
+    ],
 )
 
 # ---------------------------------------------------------------------------
@@ -81,10 +98,14 @@ _ros_pack = _stub("pyrosetta.rosetta.core.pack")
 _ros_task = _stub(
     "pyrosetta.rosetta.core.pack.task", TaskFactory=MagicMock(name="TaskFactory")
 )
+_ros_kinematics = _stub(
+    "pyrosetta.rosetta.core.kinematics", MoveMap=MagicMock(name="MoveMap")
+)
 _ros_proto = _stub("pyrosetta.rosetta.protocols")
 _ros_minpack = _stub(
     "pyrosetta.rosetta.protocols.minimization_packing",
     PackRotamersMover=MagicMock(name="PackRotamersMover"),
+    MinMover=MagicMock(name="MinMover"),
 )
 
 # Expose sub-packages as attributes on their parents so attribute access works
@@ -95,6 +116,7 @@ _rosetta.utility = _ros_util
 _rosetta.core = _ros_core
 _ros_core.chemical = _ros_chem
 _ros_core.pack = _ros_pack
+_ros_core.kinematics = _ros_kinematics
 _ros_pack.task = _ros_task
 _rosetta.protocols = _ros_proto
 _ros_proto.minimization_packing = _ros_minpack

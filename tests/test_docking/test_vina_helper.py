@@ -9,6 +9,7 @@ Run from the project root:
 """
 
 import csv
+import subprocess
 import sys
 import tempfile
 import types
@@ -409,83 +410,94 @@ class TestPrepareReceptor(unittest.TestCase):
 
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
-    def _build_modules(self):
-        """Return a sys.modules patch dict for all external deps plus the key stubs."""
+    # prepare_receptor now: PDBFixer (pdbfixer + openmm) -> subprocess call to
+    # meeko's mk_prepare_receptor.py. Only pdbfixer/openmm are imported; the
+    # meeko CLI is located with shutil.which and invoked with subprocess.run.
+    _WHICH = "mutadock.docking.vina_helper.shutil.which"
+    _RUN = "mutadock.docking.vina_helper.subprocess.run"
+
+    def _module_stubs(self):
+        """sys.modules stubs for the only imports prepare_receptor now uses."""
         pdbfixer_stub = types.ModuleType("pdbfixer")
         pdbfixer_stub.PDBFixer = MagicMock(return_value=MagicMock())
-
         openmm_app_stub = types.ModuleType("openmm.app")
         openmm_app_stub.PDBFile = MagicMock()
         openmm_stub = types.ModuleType("openmm")
-
-        mol_setup = MagicMock()
-        meeko_stub = types.ModuleType("meeko")
-        meeko_stub.MoleculePreparation = MagicMock(
-            return_value=MagicMock(prepare=MagicMock(return_value=[mol_setup]))
-        )
-        meeko_stub.PDBQTWriterLegacy = MagicMock()
-        meeko_stub.PDBQTWriterLegacy.write_string = MagicMock(
-            return_value=("ATOM      1\n", None, None)
-        )
-
-        rdkit_chem_stub = types.ModuleType("rdkit.Chem")
-        rdkit_chem_stub.MolFromPDBFile = MagicMock(return_value=MagicMock())
-        rdkit_chem_stub.SanitizeMol = MagicMock()
-        rdkit_stub = types.ModuleType("rdkit")
-
         modules = {
             "pdbfixer": pdbfixer_stub,
             "openmm": openmm_stub,
             "openmm.app": openmm_app_stub,
-            "meeko": meeko_stub,
-            "rdkit": rdkit_stub,
-            "rdkit.Chem": rdkit_chem_stub,
         }
-        return modules, pdbfixer_stub, meeko_stub, rdkit_chem_stub
+        return modules, pdbfixer_stub
+
+    @staticmethod
+    def _run_writes(out_path):
+        """subprocess.run replacement that 'creates' the pdbqt and returns rc=0."""
+
+        def _run(cmd, **kw):
+            Path(out_path).write_text("ATOM      1\n")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        return _run
 
     def test_success_does_not_raise(self):
-        modules, _, _, _ = self._build_modules()
-        with patch.dict(sys.modules, modules):
+        modules, _ = self._module_stubs()
+        with (
+            patch.dict(sys.modules, modules),
+            patch(self._WHICH, return_value="/fake/mk_prepare_receptor.py"),
+            patch(self._RUN, side_effect=self._run_writes(self.out)),
+        ):
             vina_helper.prepare_receptor(self.pdb, self.out)
+        self.assertTrue(Path(self.out).is_file())
 
-    def test_meeko_failure_raises(self):
+    def test_mk_prepare_receptor_failure_raises(self):
         from mutadock.docking.exceptions import ReceptorPreparationError
 
-        modules, _, meeko_stub, _ = self._build_modules()
-        meeko_stub.PDBQTWriterLegacy.write_string.side_effect = RuntimeError(
-            "conversion error"
-        )
-        with patch.dict(sys.modules, modules):
+        modules, _ = self._module_stubs()
+        with (
+            patch.dict(sys.modules, modules),
+            patch(self._WHICH, return_value="/fake/mk_prepare_receptor.py"),
+            patch(
+                self._RUN,
+                return_value=MagicMock(returncode=1, stdout="", stderr="boom"),
+            ),
+        ):
+            with self.assertRaises(ReceptorPreparationError):
+                vina_helper.prepare_receptor(self.pdb, self.out)
+
+    def test_missing_mk_prepare_receptor_raises(self):
+        from mutadock.docking.exceptions import ReceptorPreparationError
+
+        modules, _ = self._module_stubs()
+        with patch.dict(sys.modules, modules), patch(self._WHICH, return_value=None):
             with self.assertRaises(ReceptorPreparationError):
                 vina_helper.prepare_receptor(self.pdb, self.out)
 
     def test_pdbfixer_failure_raises(self):
         from mutadock.docking.exceptions import ReceptorPreparationError
 
-        modules, pdbfixer_stub, _, _ = self._build_modules()
+        modules, pdbfixer_stub = self._module_stubs()
         pdbfixer_stub.PDBFixer.side_effect = RuntimeError("bad pdb")
-        with patch.dict(sys.modules, modules):
-            with self.assertRaises(ReceptorPreparationError):
-                vina_helper.prepare_receptor(self.pdb, self.out)
-
-    def test_rdkit_returns_none_raises(self):
-        from mutadock.docking.exceptions import ReceptorPreparationError
-
-        modules, _, _, rdkit_chem_stub = self._build_modules()
-        rdkit_chem_stub.MolFromPDBFile.return_value = None
-        with patch.dict(sys.modules, modules):
+        with (
+            patch.dict(sys.modules, modules),
+            patch(self._WHICH, return_value="/fake/mk_prepare_receptor.py"),
+        ):
             with self.assertRaises(ReceptorPreparationError):
                 vina_helper.prepare_receptor(self.pdb, self.out)
 
     def test_default_output_uses_pdbqt_extension(self):
-        modules, _, _, _ = self._build_modules()
-        with patch.dict(sys.modules, modules):
-            vina_helper.prepare_receptor(self.pdb)
+        modules, _ = self._module_stubs()
         default_out = str(Path(self.pdb).with_suffix(".pdbqt"))
-        self.assertTrue(default_out.endswith(".pdbqt"))
+        with (
+            patch.dict(sys.modules, modules),
+            patch(self._WHICH, return_value="/fake/mk_prepare_receptor.py"),
+            patch(self._RUN, side_effect=self._run_writes(default_out)),
+        ):
+            vina_helper.prepare_receptor(self.pdb)
+        self.assertTrue(Path(default_out).is_file())
 
     def test_tmp_file_cleaned_up_after_success(self):
-        modules, _, _, _ = self._build_modules()
+        modules, _ = self._module_stubs()
         recorded = []
         original_unlink = Path.unlink
 
@@ -493,7 +505,11 @@ class TestPrepareReceptor(unittest.TestCase):
             recorded.append(str(self_path))
             original_unlink(self_path, **kw)
 
-        with patch.dict(sys.modules, modules):
+        with (
+            patch.dict(sys.modules, modules),
+            patch(self._WHICH, return_value="/fake/mk_prepare_receptor.py"),
+            patch(self._RUN, side_effect=self._run_writes(self.out)),
+        ):
             with patch.object(Path, "unlink", capturing_unlink):
                 vina_helper.prepare_receptor(self.pdb, self.out)
         self.assertTrue(any("_fixed.pdb" in p for p in recorded))
@@ -501,8 +517,7 @@ class TestPrepareReceptor(unittest.TestCase):
     def test_tmp_file_cleaned_up_after_failure(self):
         from mutadock.docking.exceptions import ReceptorPreparationError
 
-        modules, _, meeko_stub, _ = self._build_modules()
-        meeko_stub.PDBQTWriterLegacy.write_string.side_effect = RuntimeError("fail")
+        modules, _ = self._module_stubs()
         recorded = []
         original_unlink = Path.unlink
 
@@ -510,7 +525,14 @@ class TestPrepareReceptor(unittest.TestCase):
             recorded.append(str(self_path))
             original_unlink(self_path, **kw)
 
-        with patch.dict(sys.modules, modules):
+        with (
+            patch.dict(sys.modules, modules),
+            patch(self._WHICH, return_value="/fake/mk_prepare_receptor.py"),
+            patch(
+                self._RUN,
+                return_value=MagicMock(returncode=1, stdout="", stderr="fail"),
+            ),
+        ):
             with patch.object(Path, "unlink", capturing_unlink):
                 with self.assertRaises(ReceptorPreparationError):
                     vina_helper.prepare_receptor(self.pdb, self.out)
@@ -748,6 +770,184 @@ class TestDockVina(unittest.TestCase):
             )
         cmd = mock_run.call_args[0][0]
         self.assertIn("5.0", cmd)
+
+
+class TestFetchLigand(unittest.TestCase):
+    """Tests for fetch_ligand (PubChem CID/name), with the network mocked."""
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def _download_stub(self, content="ok"):
+        """Return (stub, calls) where stub records the URL and writes content."""
+        calls: dict = {}
+
+        def _stub(url, dest):
+            calls["url"] = url
+            Path(dest).write_text(content)
+
+        return _stub, calls
+
+    def test_cid_digits_autodetected(self):
+        stub, calls = self._download_stub()
+        with (
+            patch("urllib.request.urlretrieve", stub),
+            patch("mutadock.docking.vina_helper._validate_sdf"),
+        ):
+            out = vina_helper.fetch_ligand("2244", dest_dir=self.tmpdir)
+        self.assertIn("/compound/cid/2244/SDF", calls["url"])
+        self.assertTrue(out.endswith("CID_2244.sdf"))
+
+    def test_name_autodetected_and_url_encoded(self):
+        stub, calls = self._download_stub()
+        with (
+            patch("urllib.request.urlretrieve", stub),
+            patch("mutadock.docking.vina_helper._validate_sdf"),
+        ):
+            vina_helper.fetch_ligand("acetylsalicylic acid", dest_dir=self.tmpdir)
+        self.assertIn("/compound/name/acetylsalicylic%20acid/SDF", calls["url"])
+
+    def test_explicit_prefixes(self):
+        stub, calls = self._download_stub()
+        with (
+            patch("urllib.request.urlretrieve", stub),
+            patch("mutadock.docking.vina_helper._validate_sdf"),
+        ):
+            vina_helper.fetch_ligand("cid:5291", dest_dir=self.tmpdir)
+            self.assertIn("/cid/5291/", calls["url"])
+            vina_helper.fetch_ligand("name:imatinib", dest_dir=self.tmpdir)
+            self.assertIn("/name/imatinib/", calls["url"])
+
+    def test_invalid_cid_raises(self):
+        with self.assertRaises(LigandPreparationError):
+            vina_helper.fetch_ligand("cid:abc", dest_dir=self.tmpdir)
+
+    def test_empty_code_raises(self):
+        with self.assertRaises(LigandPreparationError):
+            vina_helper.fetch_ligand("   ", dest_dir=self.tmpdir)
+
+    def test_existing_file_reused_without_download(self):
+        (self.tmpdir / "CID_2244.sdf").write_text("existing")
+        stub, calls = self._download_stub()
+        with patch("urllib.request.urlretrieve", stub):
+            out = vina_helper.fetch_ligand("2244", dest_dir=self.tmpdir)
+        self.assertNotIn("url", calls)  # no download attempted
+        self.assertTrue(out.endswith("CID_2244.sdf"))
+
+    def test_http_error_raises_clear_message(self):
+        import urllib.error
+
+        def _stub(url, dest):
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+        with patch("urllib.request.urlretrieve", _stub):
+            with self.assertRaises(LigandPreparationError):
+                vina_helper.fetch_ligand("cid:999999999", dest_dir=self.tmpdir)
+
+    def test_non_sdf_body_rejected(self):
+        stub, _ = self._download_stub(content="<html>Status: 404</html>")
+        with patch("urllib.request.urlretrieve", stub):
+            with self.assertRaises(LigandPreparationError):
+                vina_helper.fetch_ligand("2244", dest_dir=self.tmpdir)
+
+
+class TestSubprocessTimeouts(unittest.TestCase):
+    """A hung external tool must raise a domain error (so the batch loop can
+    skip that combination) rather than block forever.  Each subprocess.run is
+    given a timeout; a TimeoutExpired must be routed to the right exception."""
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    @staticmethod
+    def _timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="fake", timeout=kwargs.get("timeout", 1))
+
+    # --- env-driven timeout resolution ------------------------------------
+
+    def test_timeout_from_env_default_when_unset(self):
+        with patch.dict("os.environ", {}, clear=False):
+            import os
+
+            os.environ.pop("MD_TEST_TO", None)
+            self.assertEqual(vina_helper._timeout_from_env("MD_TEST_TO", 900.0), 900.0)
+
+    def test_timeout_from_env_zero_disables(self):
+        with patch.dict("os.environ", {"MD_TEST_TO": "0"}):
+            self.assertIsNone(vina_helper._timeout_from_env("MD_TEST_TO", 900.0))
+
+    def test_timeout_from_env_parses_value(self):
+        with patch.dict("os.environ", {"MD_TEST_TO": "12.5"}):
+            self.assertEqual(vina_helper._timeout_from_env("MD_TEST_TO", 900.0), 12.5)
+
+    def test_timeout_from_env_invalid_falls_back(self):
+        with patch.dict("os.environ", {"MD_TEST_TO": "junk"}):
+            self.assertEqual(vina_helper._timeout_from_env("MD_TEST_TO", 900.0), 900.0)
+
+    # --- TimeoutExpired routing per subprocess ----------------------------
+
+    def test_run_autosite_timeout_raises_docking_run_error(self):
+        rec = self.tmpdir / "r.pdbqt"
+        rec.write_text("x")
+        with (
+            patch(
+                "mutadock.docking.vina_helper.shutil.which", return_value="/x/autosite"
+            ),
+            patch("subprocess.run", side_effect=self._timeout),
+        ):
+            with self.assertRaises(DockingRunError) as ctx:
+                vina_helper.run_autosite(str(rec))
+        self.assertIn("timed out", str(ctx.exception))
+
+    def test_dock_vina_timeout_raises_and_logs(self):
+        log = self.tmpdir / "log.txt"
+        with patch("subprocess.run", side_effect=self._timeout):
+            with self.assertRaises(DockingRunError) as ctx:
+                vina_helper.dock_vina(
+                    "r.pdbqt",
+                    "l.pdbqt",
+                    str(self.tmpdir / "o.pdbqt"),
+                    str(log),
+                    center=[0, 0, 0],
+                    box_size=[10, 10, 10],
+                )
+        self.assertIn("timed out", str(ctx.exception))
+        self.assertIn("timed out", log.read_text())
+
+    def test_prepare_receptor_timeout_raises_receptor_error(self):
+        from mutadock.docking.exceptions import ReceptorPreparationError
+
+        pdbfixer_stub = types.ModuleType("pdbfixer")
+        pdbfixer_stub.PDBFixer = MagicMock(return_value=MagicMock())
+        openmm_app_stub = types.ModuleType("openmm.app")
+        openmm_app_stub.PDBFile = MagicMock()
+        modules = {
+            "pdbfixer": pdbfixer_stub,
+            "openmm": types.ModuleType("openmm"),
+            "openmm.app": openmm_app_stub,
+        }
+        src = self.tmpdir / "in.pdb"
+        src.touch()
+        with (
+            patch.dict(sys.modules, modules),
+            patch(
+                "mutadock.docking.vina_helper.shutil.which",
+                return_value="/x/mk_prepare_receptor.py",
+            ),
+            patch("subprocess.run", side_effect=self._timeout),
+        ):
+            with self.assertRaises(ReceptorPreparationError):
+                vina_helper.prepare_receptor(str(src), str(self.tmpdir / "o.pdbqt"))
 
 
 if __name__ == "__main__":

@@ -11,6 +11,9 @@ repos:
       - id: check-toml
       - id: check-merge-conflict
       - id: check-added-large-files
+        # ngl.min.js is a vendored NGL library (~1.2 MB) inlined into the
+        # self-contained HTML report; it must ship in the package.
+        exclude: ^src/mutadock/report/assets/ngl\.min\.js$
       - id: debug-statements
 
   # ---------------------------------------------------------------------------

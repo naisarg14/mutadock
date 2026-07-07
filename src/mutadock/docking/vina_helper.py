@@ -19,6 +19,9 @@
 
 
 import logging
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -47,6 +50,39 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# PubChem PUG REST endpoint for a 3D SDF conformer, by CID or name.
+PUBCHEM_SDF_URL = (
+    "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/{route}/SDF?record_type=3d"
+)
+
+
+def _timeout_from_env(var: str, default: float) -> Optional[float]:
+    """Resolve a subprocess timeout (in seconds) from *var*, else *default*.
+
+    A non-positive or unparseable value disables the timeout (returns ``None``),
+    giving users an escape hatch for legitimately long-running jobs.
+    """
+    raw = os.environ.get(var)
+    if raw is None:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        logger.warning(
+            "Ignoring invalid %s=%r; falling back to %ss.", var, raw, default
+        )
+        return default
+    return value if value > 0 else None
+
+
+# Per-subprocess wall-clock ceilings (seconds) so a hung external tool
+# (mk_prepare_receptor, AutoSite, Vina) can't stall an entire batch.  Each is
+# overridable via the matching ``MUTADOCK_*`` environment variable; set it to 0
+# (or a negative value) to disable that timeout entirely.
+RECEPTOR_PREP_TIMEOUT = _timeout_from_env("MUTADOCK_RECEPTOR_PREP_TIMEOUT", 900.0)
+AUTOSITE_TIMEOUT = _timeout_from_env("MUTADOCK_AUTOSITE_TIMEOUT", 1800.0)
+VINA_TIMEOUT = _timeout_from_env("MUTADOCK_VINA_TIMEOUT", 3600.0)
 
 
 def backup(file_path: str) -> bool:
@@ -251,6 +287,120 @@ def vina_split(input_file: str, output_file: Optional[str] = None) -> tuple[floa
     return (score, output_file)
 
 
+def _validate_sdf(path: Path, label: str) -> None:
+    """Raise ``LigandPreparationError`` unless *path* is a usable 3D SDF.
+
+    PubChem returns an HTTP error body (not an SDF) for unknown compounds; a
+    plain ``urlretrieve`` writes that body to disk without raising, so the
+    download must be validated rather than trusted.
+    """
+    text = path.read_text(errors="ignore")
+    if "$$$$" not in text or ("V2000" not in text and "V3000" not in text):
+        path.unlink(missing_ok=True)
+        raise LigandPreparationError(
+            f"Downloaded file for '{label}' is not a valid SDF "
+            "(PubChem likely returned an error page)."
+        )
+    try:
+        from rdkit import Chem
+    except ImportError:
+        return  # RDKit unavailable — the textual check above is the best we can do
+    try:
+        mol = next(iter(Chem.SDMolSupplier(str(path), removeHs=False)), None)
+        if mol is None or mol.GetNumAtoms() == 0 or mol.GetNumConformers() == 0:
+            raise ValueError("no parseable molecule with 3D coordinates")
+    except LigandPreparationError:
+        raise
+    except Exception as e:
+        path.unlink(missing_ok=True)
+        raise LigandPreparationError(
+            f"Downloaded SDF for '{label}' is unusable: {e}"
+        ) from e
+
+
+def fetch_ligand(
+    code: str,
+    dest_dir: Optional[str | Path] = None,
+    name: Optional[str] = None,
+) -> str:
+    """Download a 3D ligand SDF from PubChem by CID or compound name.
+
+    Args:
+        code: A PubChem identifier. Digits are treated as a CID; anything else
+            is treated as a compound name. Explicit ``cid:`` / ``name:``
+            prefixes override the auto-detection (e.g. ``"cid:2244"``,
+            ``"name:aspirin"``).
+        dest_dir: Directory to save the SDF into. Defaults to the current
+            working directory. An existing non-empty file is reused.
+        name: Base filename (without extension). Defaults to ``CID_<n>`` for a
+            CID or a filesystem-safe form of the name.
+
+    Returns:
+        Path to the downloaded (or already-present) 3D ``.sdf`` file.
+
+    Raises:
+        LigandPreparationError: If *code* is malformed, the download fails, or
+            the downloaded file is not a usable 3D SDF.
+    """
+    import re
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+
+    raw = code.strip()
+    if not raw:
+        raise LigandPreparationError("Empty ligand code.")
+    lowered = raw.lower()
+    if lowered.startswith("cid:"):
+        kind, value = "cid", raw[4:].strip()
+    elif lowered.startswith("name:"):
+        kind, value = "name", raw[5:].strip()
+    elif raw.isdigit():
+        kind, value = "cid", raw
+    else:
+        kind, value = "name", raw
+    if not value:
+        raise LigandPreparationError(f"Invalid ligand code '{code}'.")
+
+    if kind == "cid":
+        if not value.isdigit():
+            raise LigandPreparationError(
+                f"Invalid PubChem CID '{value}': expected digits (e.g. 2244)."
+            )
+        route = f"cid/{value}"
+        stem = name or f"CID_{value}"
+    else:
+        route = f"name/{urllib.parse.quote(value)}"
+        stem = name or (re.sub(r"[^0-9A-Za-z._-]+", "_", value).strip("_") or "ligand")
+
+    directory = Path(dest_dir) if dest_dir else Path.cwd()
+    directory.mkdir(parents=True, exist_ok=True)
+    dest = directory / f"{stem}.sdf"
+    if dest.is_file() and dest.stat().st_size > 0:
+        logger.info(
+            "Ligand '%s' already present at '%s'; skipping download.", value, dest
+        )
+        return str(dest)
+
+    url = PUBCHEM_SDF_URL.format(route=route)
+    logger.info("Fetching ligand %s '%s' from PubChem ...", kind, value)
+    try:
+        urllib.request.urlretrieve(url, dest)
+    except urllib.error.HTTPError as e:
+        raise LigandPreparationError(
+            f"PubChem has no 3D record for {kind} '{value}' (HTTP {e.code}). "
+            "Check the CID/name, or supply your own SDF/MOL2 ligand file."
+        ) from e
+    except Exception as e:
+        raise LigandPreparationError(
+            f"Failed to fetch ligand '{value}' from PubChem ({url}): {e}"
+        ) from e
+
+    _validate_sdf(dest, value)
+    logger.info("Saved ligand to '%s'.", dest)
+    return str(dest)
+
+
 def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> str:
     """Convert an SDF or MOL2 ligand file to PDBQT format using meeko.
 
@@ -318,11 +468,13 @@ def prepare_receptor(
     input_pdb: str,
     output_pdbqt: Optional[str] = None,
 ) -> None:
-    """Prepare a receptor PDB file for docking using pdbfixer, RDKit, and meeko.
+    """Prepare a receptor PDB file for docking using PDBFixer and meeko.
 
-    Fixes missing residues/atoms with PDBFixer, loads the result with RDKit,
-    and converts to PDBQT with meeko.  A temporary ``_fixed.pdb`` file is
-    created and removed regardless of success or failure.
+    Fixes missing residues/atoms and adds hydrogens with PDBFixer, then converts
+    the result to a rigid-receptor PDBQT with meeko's ``mk_prepare_receptor.py``
+    command-line tool (which, unlike meeko's ligand ``MoleculePreparation`` API,
+    correctly handles multi-chain / multi-fragment receptors).  A temporary
+    ``_fixed.pdb`` file is created and removed regardless of success or failure.
 
     Args:
         input_pdb: Path to the input PDB file.
@@ -330,15 +482,24 @@ def prepare_receptor(
             the extension replaced by ``.pdbqt``.
 
     Raises:
-        ReceptorPreparationError: If any preparation step fails.
+        ReceptorPreparationError: If any preparation step fails or the meeko
+            ``mk_prepare_receptor.py`` tool is not on PATH.
     """
     try:
-        from meeko import MoleculePreparation, PDBQTWriterLegacy
         from openmm.app import PDBFile
         from pdbfixer import PDBFixer
-        from rdkit.Chem import MolFromPDBFile, SanitizeMol
     except ModuleNotFoundError as e:
         raise ReceptorPreparationError(f"Missing required module: {e}") from e
+
+    mk_receptor = shutil.which("mk_prepare_receptor.py") or shutil.which(
+        "mk_prepare_receptor"
+    )
+    if mk_receptor is None:
+        raise ReceptorPreparationError(
+            "meeko's 'mk_prepare_receptor.py' was not found on PATH. It ships "
+            "with meeko (pip install meeko); ensure the environment's scripts "
+            "directory is on PATH."
+        )
 
     if output_pdbqt is None:
         output_pdbqt = str(Path(input_pdb).with_suffix(".pdbqt"))
@@ -356,17 +517,17 @@ def prepare_receptor(
         with open(tmp_pdb, "w") as f:
             PDBFile.writeFile(fixer.topology, fixer.positions, f)
 
-        mol = MolFromPDBFile(tmp_pdb, sanitize=False)
-        if mol is None:
-            raise ValueError("RDKit could not load the fixed PDB as a molecule")
-        SanitizeMol(mol)
-
-        mp = MoleculePreparation()
-        mol_setups = mp.prepare(mol)
-        pdbqt_string, _, _ = PDBQTWriterLegacy.write_string(mol_setups[0])
-
-        with open(output_pdbqt, "w") as f:
-            f.write(pdbqt_string)
+        result = subprocess.run(
+            [sys.executable, mk_receptor, "--read_pdb", tmp_pdb, "-p", output_pdbqt],
+            capture_output=True,
+            text=True,
+            timeout=RECEPTOR_PREP_TIMEOUT,
+        )
+        if result.returncode != 0 or not Path(output_pdbqt).is_file():
+            raise ValueError(
+                "mk_prepare_receptor failed: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
 
     except ReceptorPreparationError:
         raise
@@ -379,19 +540,21 @@ def prepare_receptor(
             Path(tmp_pdb).unlink()
 
 
-def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
+def add_score_to_csv(pose_file: str, csv_file: str, score: float) -> str:
     """Append a docking result row to the aggregate CSV file.
 
     Reads the last row to determine the next serial number, then appends a
     row with columns ``sr``, ``name``, and ``affinity``.
 
     Args:
-        out_pdb: Path to the docking output file (used to derive the run name).
+        pose_file: Path to the docking pose file (used to derive the run
+            name); the ``_out`` suffix and any extension are stripped, so
+            ``rec_lig_out.sdf``/``.pdbqt``/``.pdb`` all yield ``rec_lig``.
         csv_file: Path to the CSV file to append to (created if absent).
         score: Binding affinity in kcal/mol.
 
     Returns:
-        The run name derived from *out_pdb*.
+        The run name derived from *pose_file*.
 
     Raises:
         DockingError: If writing to the CSV file fails.
@@ -418,7 +581,9 @@ def add_score_to_csv(out_pdb: str, csv_file: str, score: float) -> str:
         except Exception:
             count = 1
 
-    name = Path(out_pdb).name.removesuffix("_out.pdb")
+    # Strip the trailing "_out" and any extension so the run name is the same
+    # regardless of which pose artifact (SDF / PDBQT) is passed in.
+    name = Path(pose_file).stem.removesuffix("_out")
     try:
         with open(csv_file, "a", newline="") as out:
             writer = csv.writer(out)
@@ -508,12 +673,19 @@ def run_autosite(receptor_pdbqt: str) -> str:
 
     out_dir.mkdir(exist_ok=False)
 
-    result = subprocess.run(
-        [autosite_cmd, "-r", receptor_path.name, "-o", out_dir.name],
-        capture_output=True,
-        text=True,
-        cwd=str(receptor_path.parent),
-    )
+    try:
+        result = subprocess.run(
+            [autosite_cmd, "-r", receptor_path.name, "-o", out_dir.name],
+            capture_output=True,
+            text=True,
+            cwd=str(receptor_path.parent),
+            timeout=AUTOSITE_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise DockingRunError(
+            f"autosite timed out after {AUTOSITE_TIMEOUT}s on "
+            f"'{receptor_path.name}' and was terminated."
+        ) from e
     if result.returncode != 0:
         raise DockingRunError(f"autosite failed:\n{result.stderr.strip()}")
 
@@ -607,7 +779,20 @@ def dock_vina(
     ]
     commands.append("--overwrite" if overwrite else "--no-overwrite")
     with open(log_file, "w+") as lfile:
-        result = subprocess.run(commands, stdout=lfile, stderr=lfile, text=True)
+        try:
+            result = subprocess.run(
+                commands,
+                stdout=lfile,
+                stderr=lfile,
+                text=True,
+                timeout=VINA_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired as e:
+            lfile.write(f"\nVina timed out after {VINA_TIMEOUT}s and was terminated.\n")
+            raise DockingRunError(
+                f"Vina timed out after {VINA_TIMEOUT}s for "
+                f"'{Path(receptor).name}' + '{Path(ligand).name}'."
+            ) from e
 
     if result.returncode != 0:
         raise DockingRunError(f"Check the error in {log_file}")

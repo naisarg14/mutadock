@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutadock"
-version = "2.0.0"
+version = "2.1.0"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
@@ -22,6 +22,9 @@ dependencies = [
   'tqdm',
   'pyarrow',
   'pandas',
+  'matplotlib',
+  'python-pptx',
+  'jinja2',
 ]
 
 
@@ -40,10 +43,14 @@ classifiers = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mutadock"]
+# Non-Python data under the package (vendored NGL + Jinja templates in
+# src/mutadock/report/{assets,templates}) is included in the wheel by default
+# because it lives inside the packaged directory.
 
 [project.scripts]
 md_mutate = "mutadock.mutation.np_mutation:np_mutation"
 md_dock = "mutadock.docking.np_docking:np_docking"
+md_quick = "mutadock.quick:md_quick"
 md_vina_dock = "mutadock.docking.vina_dock:main"
 md_csv_generator = "mutadock.mutation.csv_generator:main"
 md_csv_sort = "mutadock.mutation.csv_sort:main"
@@ -51,6 +58,7 @@ md_ddg_single = "mutadock.mutation.ddg_calc:main"
 md_ddg_double = "mutadock.mutation.ddg_calc_double:main"
 md_ddg_triple = "mutadock.mutation.ddg_calc_triple:main"
 md_generate_pdb = "mutadock.mutation.generate_mutant_pdb:main"
+md_report = "mutadock.report.report:md_report"
 
 
 [project.optional-dependencies]
@@ -152,7 +160,7 @@ target-version = "py311"
 select = ["E", "W", "F", "B", "UP"]
 ignore = [
   "E501",   # line length — enforced by black
-  "UP007",  # use X | Y for union types — Optional kept for clarity
+  "UP007",  # use X | Y for union types — Optional kept for clarity (covers Optional too in this ruff version)
 ]
 
 [tool.ruff.lint.per-file-ignores]

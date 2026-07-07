@@ -8,3 +8,11 @@ class PDBFileError(MutationError):
 
 class CSVGenerationError(MutationError):
     """Raised when CSV generation fails."""
+
+
+class ResidueMismatchError(MutationError):
+    """Raised when the expected wild-type residue doesn't match the structure.
+
+    Typically means the caller's (chain, position) numbering convention
+    doesn't match the PDB file's own residue numbering.
+    """

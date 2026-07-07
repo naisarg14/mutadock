@@ -16,28 +16,27 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mutadock.mutation import np_mutation
-from mutadock.mutation.helpers import permutations
 
 # ---------------------------------------------------------------------------
-# Flow tests for the triple-ddG "skip if exists" predicate (bug 2.7)
+# Flow tests for the double/triple-ddG "skip if exists" predicate (bug 2.7)
 # ---------------------------------------------------------------------------
 #
-# The buggy skip check for the *sorted triple* file compared the file's line
-# count against ``permutations(num_double_ddg, 2)`` instead of
-# ``permutations(num_triple_ddg, 3)``.  These tests drive the full
-# ``np_mutation()`` orchestrator with every pipeline stage mocked, and use the
-# number of ``sort_csv`` calls as the discriminator:
+# The skip check for the *sorted triple* file must compare the file's line
+# count against the number of rows a COMPLETE triple-ddG CSV would contain
+# (``combinations(unique_singles, 3)`` + a header) — not a permutation count,
+# and not the double count.  These tests drive the full ``np_mutation()``
+# orchestrator with every pipeline stage mocked and use the number of
+# ``sort_csv`` calls as the discriminator:
 #
 #   * single-sort + double-sort always run       -> 2 calls
 #   * triple-sort runs only when NOT skipped      -> +1 call (3 total)
 #
-# With num_double_ddg=4 (P(4,2)=12) and num_triple_ddg=3 (P(3,3)=6) the two
-# expected counts differ, so the double- vs triple-count comparison is
-# observable.
+# ``_expected_double_lines`` / ``_expected_triple_lines`` are patched to known,
+# distinct values so the predicate's wiring (skips only on an exact match to
+# the TRIPLE count) is observable without touching the filesystem.
 
-
-# Sanity: the two permutation counts must differ for the discriminator to work.
-assert permutations(4, 2) != permutations(3, 3)  # 12 != 6
+EXPECTED_DOUBLE_LINES = 12
+EXPECTED_TRIPLE_LINES = 6
 
 
 class TestTripleSkipPredicate(unittest.TestCase):
@@ -68,6 +67,9 @@ class TestTripleSkipPredicate(unittest.TestCase):
             15,  # num_triple_mut
             True,  # append
             True,  # quiet
+            None,  # output_dir
+            True,  # no_report
+            {},  # ddg_params
         )
 
         def fake_file_info(path):
@@ -109,26 +111,91 @@ class TestTripleSkipPredicate(unittest.TestCase):
             patch.object(np_mutation, "generate_double_mutation"),
             patch.object(np_mutation, "generate_triple_mutation"),
             patch.object(np_mutation, "backup"),
+            patch.object(
+                np_mutation,
+                "_expected_double_lines",
+                return_value=EXPECTED_DOUBLE_LINES,
+            ),
+            patch.object(
+                np_mutation,
+                "_expected_triple_lines",
+                return_value=EXPECTED_TRIPLE_LINES,
+            ),
         ):
             np_mutation.np_mutation()
 
         return mock_sort.call_count
 
-    def test_skip_fires_when_count_equals_triple_permutation(self):
-        """Sorted-triple file with P(triple, 3) lines -> triple sort skipped."""
-        count = self._run(permutations(self.NUM_TRIPLE_DDG, 3))  # 6
+    def test_skip_fires_when_count_equals_triple_combination(self):
+        """Sorted-triple file with the exact triple-combination line count ->
+        triple sort is skipped."""
+        count = self._run(EXPECTED_TRIPLE_LINES)
         # single + double sort ran; triple sort was skipped.
         self.assertEqual(count, 2)
 
-    def test_skip_does_not_fire_when_count_equals_double_permutation(self):
-        """Sorted-triple file with P(double, 2) lines -> triple sort still runs.
+    def test_skip_does_not_fire_when_count_equals_double_count(self):
+        """Sorted-triple file whose line count matches the DOUBLE count ->
+        triple sort still runs.
 
-        This is the case the original bug got wrong: it would have (incorrectly)
-        skipped the triple sort because it compared against the double count.
+        This is the case the original bug got wrong: it compared the triple
+        file against the double count and would have wrongly skipped.
         """
-        count = self._run(permutations(self.NUM_DOUBLE_DDG, 2))  # 12
+        count = self._run(EXPECTED_DOUBLE_LINES)
         # single + double + triple sort all ran.
         self.assertEqual(count, 3)
+
+
+class TestResumeWiring(unittest.TestCase):
+    """np_mutation must thread ``resume=append`` into all three ΔΔG calcs, so an
+    interrupted run resumes per-item (append=True) rather than recomputing."""
+
+    def _run_and_capture(self, append: bool):
+        base = "/work/prot"
+        inputs = (f"{base}.pdb", 4, 15, 15, 3, 15, append, True, None, True, {})
+        # Every output absent -> every calc stage executes (nothing skipped).
+        with (
+            patch.object(np_mutation, "get_inputs", return_value=inputs),
+            patch.object(np_mutation, "file_info", return_value=(False, 0)),
+            patch.object(np_mutation, "clean_pdb"),
+            patch.object(
+                np_mutation,
+                "generate_csv",
+                return_value=(f"{base}_mutations.csv", None),
+            ),
+            patch.object(
+                np_mutation, "calc_ddg", return_value=f"{base}_ddG.csv"
+            ) as m_single,
+            patch.object(
+                np_mutation, "calc_double_ddg", return_value=f"{base}_double_ddg.csv"
+            ) as m_double,
+            patch.object(
+                np_mutation, "calc_triple_ddg", return_value=f"{base}_triple_ddg.csv"
+            ) as m_triple,
+            patch.object(
+                np_mutation,
+                "sort_csv",
+                side_effect=lambda in_file, *a, **k: (
+                    k.get("out_file")
+                    or f"{str(in_file).removesuffix('.csv')}_sorted.csv"
+                ),
+            ),
+            patch.object(np_mutation, "generate_single_mutation"),
+            patch.object(np_mutation, "generate_double_mutation"),
+            patch.object(np_mutation, "generate_triple_mutation"),
+            patch.object(np_mutation, "backup"),
+            patch.object(np_mutation, "_expected_double_lines", return_value=-1),
+            patch.object(np_mutation, "_expected_triple_lines", return_value=-1),
+        ):
+            np_mutation.np_mutation()
+        return m_single, m_double, m_triple
+
+    def test_resume_true_passed_when_append(self):
+        for m in self._run_and_capture(append=True):
+            self.assertIs(m.call_args.kwargs.get("resume"), True, m._mock_name)
+
+    def test_resume_false_passed_when_no_append(self):
+        for m in self._run_and_capture(append=False):
+            self.assertIs(m.call_args.kwargs.get("resume"), False, m._mock_name)
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +278,7 @@ class TestCifConversion(unittest.TestCase):
 
         Returns ``(convert_mock, clean_mock)`` for assertions.
         """
-        inputs = (input_path, 4, 15, 15, 3, 15, True, True)
+        inputs = (input_path, 4, 15, 15, 3, 15, True, True, None, True, {})
         with (
             patch.object(np_mutation, "get_inputs", return_value=inputs),
             patch.object(np_mutation, "file_info", return_value=(False, 0)),

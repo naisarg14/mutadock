@@ -16,15 +16,20 @@
 #  or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License    #
 #  for more details.                                                           #
 ################################################################################
+"""MUTADOCK reporting subpackage.
 
-"""MUTADOCK — mutation studies and receptor-ligand docking.
-
-Top-level package exposing two subpackages:
-
-* :mod:`mutadock.mutation` — amino-acid substitution analysis (mutation CSVs,
-  ddG calculations, mutant PDB generation via PyRosetta).
-* :mod:`mutadock.docking` — AutoDock Vina integration for receptor/ligand
-  preparation and batch docking workflows.
+Public data contract for the report generators (figures / HTML / PPTX).
 """
 
-__version__ = "2.1.0"
+from __future__ import annotations
+
+from mutadock.report.data import RunData, discover_run, mutation_label, summary_stats
+from mutadock.report.report import generate_report
+
+__all__ = [
+    "RunData",
+    "discover_run",
+    "generate_report",
+    "mutation_label",
+    "summary_stats",
+]

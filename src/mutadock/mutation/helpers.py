@@ -18,6 +18,8 @@
 ################################################################################
 
 
+import argparse
+import csv
 import logging
 import os
 import re
@@ -29,7 +31,7 @@ from pathlib import Path
 from typing import Optional
 
 from .Amino import check_3, get_1, get_3
-from .exceptions import MutationError
+from .exceptions import MutationError, ResidueMismatchError
 
 DATA_DIR = Path(__file__).parent.parent.parent / "data"
 NCBI_MATRIX_URL = "https://ftp.ncbi.nih.gov/blast/matrices/"
@@ -40,6 +42,77 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def add_ddg_protocol_args(parser: argparse.ArgumentParser) -> None:
+    """Add the shared ΔΔG protocol flags to *parser*.
+
+    Used by every ΔΔG CLI (``md_ddg_single``, the double/triple calculators,
+    ``md_mutate``) so the protocol knobs are identical everywhere.  Pair with
+    :func:`resolve_ddg_params` to turn the parsed args into ``calc_*`` kwargs.
+    """
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=1,
+        metavar="N",
+        help="Independent ΔΔG estimates per mutation for mean ± SD (Rosetta "
+        "packing is stochastic; default 1).",
+    )
+    parser.add_argument(
+        "--pack-radius",
+        dest="pack_radius",
+        type=float,
+        default=8.0,
+        metavar="Å",
+        help="Å neighbourhood repacked/minimized around the mutation " "(default 8.0).",
+    )
+    parser.add_argument(
+        "--protocol",
+        choices=["fast", "min", "cartesian"],
+        default="min",
+        help="ΔΔG protocol (default: 'min'). 'min' = repack + backbone/side-chain "
+        "minimization (reliable; recommended). 'cartesian' = ref2015_cart + "
+        "Cartesian minimization (most accurate, cartesian_ddg style — Park et al. "
+        "2016; slowest). 'fast' = single repack, NO minimization — SCREENING "
+        "ONLY: fast but absolute ΔΔG values are unreliable (a failed wild-type "
+        "repack can invert a site's ranking).",
+    )
+    parser.add_argument(
+        "--reu-to-kcal",
+        dest="reu_to_kcal",
+        type=float,
+        default=None,
+        metavar="F",
+        help="Override the REU→kcal/mol scaling factor "
+        "(default: predict_ddG.REU_TO_KCAL_SCALE ≈ 0.34).",
+    )
+
+
+def resolve_ddg_params(args: argparse.Namespace) -> dict:
+    """Resolve the shared ΔΔG protocol flags into ``calc_*`` keyword arguments.
+
+    Protocol → (cartesian, backbone_minimization):
+
+    * ``fast``      → ``(False, False)`` — single repack, no minimization
+      (screening only; absolute ΔΔG unreliable).
+    * ``min``       → ``(False, True)``  — repack + minimization (default).
+    * ``cartesian`` → ``(True, True)``   — ref2015_cart + Cartesian minimization.
+
+    ``reu_to_kcal`` is only included when the user supplied ``--reu-to-kcal`` so
+    the ``calc_*`` default is used otherwise.
+    """
+    cartesian = args.protocol == "cartesian"
+    backbone_min = args.protocol in ("min", "cartesian")
+    params: dict = {
+        "replicates": args.replicates,
+        "pack_radius": args.pack_radius,
+        "backbone_minimization": backbone_min,
+        "cartesian": cartesian,
+    }
+    if args.reu_to_kcal is not None:
+        params["reu_to_kcal"] = args.reu_to_kcal
+    return params
 
 
 class Mutation:
@@ -163,6 +236,59 @@ def file_info(file_path: str) -> tuple[bool, int]:
         row_count = sum(1 for _ in path.open("r"))
         return (True, row_count)
     return (False, 0)
+
+
+def read_partial_ddg(
+    out_file: str,
+    *,
+    must_match: Optional[dict[str, object]] = None,
+) -> Optional[list[dict[str, str]]]:
+    """Read the completed rows of a partially-written ΔΔG CSV for per-item resume.
+
+    The ΔΔG output CSV acts as its own checkpoint: every fully-written row is a
+    completed item.  This returns the list of complete data rows already present
+    so a caller can rewrite them verbatim and skip recomputing them, computing
+    only the items that are missing.
+
+    A row is treated as *complete* only when its final column (``ddG_protocol``)
+    is non-empty, which drops a torn trailing line left by a mid-write
+    interruption; the caller recomputes that one item cleanly.
+
+    Args:
+        out_file: Path to the (possibly partial) ΔΔG CSV.
+        must_match: Column→value pairs every completed row must equal (compared
+            as strings) for the file to be resumable, e.g.
+            ``{"ddG_protocol": protocol, "n_replicates": replicates}``.  This
+            prevents silently mixing rows computed under different settings.
+
+    Returns:
+        The list of complete row dicts, or ``None`` when the file is absent,
+        unreadable, empty/header-only, or disagrees with *must_match* — in which
+        case the caller should start a fresh calculation.
+    """
+    path = Path(out_file)
+    if not path.is_file():
+        return None
+    try:
+        with path.open(newline="") as f:
+            reader = csv.DictReader(f)
+            if not reader.fieldnames or "ddG_protocol" not in reader.fieldnames:
+                return None
+            rows: list[dict[str, str]] = []
+            for row in reader:
+                if not row.get("ddG_protocol"):
+                    # Torn/incomplete trailing line — recompute this item.
+                    continue
+                if must_match:
+                    for col, val in must_match.items():
+                        if str(row.get(col, "")) != str(val):
+                            # Settings changed since the partial run: mixing rows
+                            # would be invalid, so start over from scratch.
+                            return None
+                rows.append(row)
+    except OSError:
+        return None
+    return rows or None
 
 
 def permutations(n: int, r: int) -> int:
@@ -484,22 +610,43 @@ def mutate_and_score(
     orig_aa: str,
     mutated_aa: str,
     output_file: str,
+    pack_radius: float = 8.0,
+    backbone_minimization: bool = False,
+    cartesian: bool = False,
 ) -> tuple[float, float, float]:
     """Apply a single-point mutation, score both WT and mutant, and write the mutant PDB.
 
     Initialises PyRosetta once per process (subsequent calls reuse the existing
-    session), loads *pdb_file* as a full-atom pose, scores the wild-type, applies
-    the substitution at (*chain*, *aa_number*) with an 8 Å repacking radius, scores
-    the mutant, and dumps the mutant coordinates to *output_file*.
+    session), loads *pdb_file* as a full-atom pose, and computes ΔΔG the same
+    way :func:`ddg_calc.calc_ddg` does: both the wild-type reference and the
+    mutant undergo the *identical* repack (and optional minimization) protocol
+    via :func:`predict_ddG.wt_reference_score` / :func:`predict_ddG.apply_mutations`,
+    so the difference is not biased by repacking only one side. The mutant
+    coordinates are dumped to *output_file*.
+
+    The residue actually present at (*chain*, *aa_number*) is verified against
+    *orig_aa* before mutating. If it doesn't match *orig_aa* but does match
+    *mutated_aa*, the structure is treated as already being the mutant (e.g. a
+    deposited mutant/co-crystal structure rather than wild-type): the mutant
+    score/PDB come from a self-mutation (consistent packing, no identity
+    change) and the wild-type reference comes from one reverse mutation back
+    to *orig_aa* — avoiding a wasted reverse-then-forward round trip through
+    the wild-type identity. If it matches neither, :class:`ResidueMismatchError`
+    is raised.
 
     Args:
         pdb_file: Path to the cleaned wild-type PDB (ATOM records only).
         chain: PDB chain identifier, e.g. ``"A"``.
         aa_number: Residue sequence number to mutate.
-        orig_aa: Wild-type amino acid (1-letter code; used for logging only).
+        orig_aa: Expected wild-type amino acid (1- or 3-letter code); verified
+            against the structure at (*chain*, *aa_number*) before mutating.
         mutated_aa: Target amino acid (1- or 3-letter code).
         output_file: Destination path for the mutant PDB file.
             Parent directories are created if absent.
+        pack_radius: Å neighbourhood repacked (and minimized) around the site.
+        backbone_minimization: Minimize backbone + side chains after packing.
+        cartesian: Use the Cartesian ``ref2015_cart`` protocol (implies/enables
+            Cartesian minimization — the ``cartesian_ddg`` style).
 
     Returns:
         ``(wt_score, mut_score, ddG)`` where ``ddG = mut_score - wt_score``
@@ -508,6 +655,8 @@ def mutate_and_score(
     Raises:
         MutationError: If PyRosetta is unavailable, the residue is not found
             in the pose, or the amino-acid code cannot be resolved.
+        ResidueMismatchError: If the residue at (*chain*, *aa_number*) matches
+            neither *orig_aa* nor *mutated_aa*.
     """
     global _rosetta_init_done
     import os
@@ -538,8 +687,7 @@ def mutate_and_score(
     with in_directory(pdb_path.parent):
         pose = pose_from_pdb(pdb_path.name)
 
-    sfxn = get_fa_scorefxn()
-    wt_score: float = sfxn.score(pose)
+    sfxn = predict_ddG.get_scorefxn(cartesian)
 
     pose_position: int = pose.pdb_info().pdb2pose(chain, aa_number)
     if pose_position == 0:
@@ -551,8 +699,72 @@ def mutate_and_score(
     if mut_1 is None:
         raise MutationError(f"Unknown amino acid code: '{mutated_aa}'")
 
-    mut_pose = predict_ddG.mutate_residue(pose, pose_position, mut_1, 8.0, sfxn)
-    mut_score: float = sfxn.score(mut_pose)
+    orig_1: Optional[str] = get_1(orig_aa) if check_3(orig_aa) else orig_aa
+    native_aa = pose.residue(pose_position).name1()
+
+    if orig_1 is not None and native_aa != orig_1 and native_aa != mut_1:
+        raise ResidueMismatchError(
+            f"Expected wild-type '{orig_1}' at {chain}{aa_number} in '{pdb_file}', "
+            f"but the structure has '{native_aa}'. The (chain, position) numbering "
+            "likely doesn't match this structure's own residue numbering."
+        )
+
+    if orig_1 is not None and native_aa == mut_1 and native_aa != orig_1:
+        # The structure already has the target mutant residue at this position
+        # (e.g. a deposited mutant/co-crystal structure rather than wild-type).
+        # Treat it as the native MT endpoint: self-mutate (consistent packing,
+        # no-op identity-wise) for the mutant score/PDB, and reverse-mutate to
+        # the wild-type letter for the reference — avoids a wasted
+        # reverse-then-forward round trip through the wild-type identity.
+        logger.info(
+            "%s chain=%s pos=%d: structure already has target residue '%s' "
+            "(expected wild-type '%s'); treating as native mutant and "
+            "reverse-mutating for the wild-type reference.",
+            pdb_path.name,
+            chain,
+            aa_number,
+            native_aa,
+            orig_1,
+        )
+        mut_pose = predict_ddG.apply_mutations(
+            pose,
+            [(pose_position, native_aa)],
+            sfxn,
+            pack_radius,
+            backbone_minimization=backbone_minimization,
+            cartesian=cartesian,
+        )
+        mut_score: float = sfxn.score(mut_pose)
+
+        wt_pose = predict_ddG.apply_mutations(
+            pose,
+            [(pose_position, orig_1)],
+            sfxn,
+            pack_radius,
+            backbone_minimization=backbone_minimization,
+            cartesian=cartesian,
+        )
+        wt_score: float = sfxn.score(wt_pose)
+    else:
+        wt_score = predict_ddG.wt_reference_score(
+            pose,
+            [pose_position],
+            sfxn,
+            pack_radius,
+            backbone_minimization=backbone_minimization,
+            cartesian=cartesian,
+        )
+
+        mut_pose = predict_ddG.apply_mutations(
+            pose,
+            [(pose_position, mut_1)],
+            sfxn,
+            pack_radius,
+            backbone_minimization=backbone_minimization,
+            cartesian=cartesian,
+        )
+        mut_score = sfxn.score(mut_pose)
+
     ddg: float = mut_score - wt_score
 
     out_path = Path(output_file)

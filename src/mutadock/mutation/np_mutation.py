@@ -20,19 +20,22 @@
 
 import argparse
 import logging
+import math
 import os
 import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 try:
     from .csv_generator import generate_csv
     from .csv_sort import sort_csv
     from .ddg_calc import calc_ddg
     from .ddg_calc_double import calc_double_ddg
+    from .ddg_calc_double import get_mut_csv as _double_mut_csv
     from .ddg_calc_triple import calc_triple_ddg
+    from .ddg_calc_triple import get_mut_csv as _triple_mut_csv
     from .exceptions import MutationError
     from .generate_mutants import (
         generate_double_mutation,
@@ -40,12 +43,13 @@ try:
         generate_triple_mutation,
     )
     from .helpers import (
+        add_ddg_protocol_args,
         backup,
         clean_pdb,
         convert_cif_pdb,
         fetch_pdb,
         file_info,
-        permutations,
+        resolve_ddg_params,
         structure_warnings,
     )
 except ImportError:
@@ -57,7 +61,9 @@ except ImportError:
     from mutadock.mutation.csv_sort import sort_csv
     from mutadock.mutation.ddg_calc import calc_ddg
     from mutadock.mutation.ddg_calc_double import calc_double_ddg
+    from mutadock.mutation.ddg_calc_double import get_mut_csv as _double_mut_csv
     from mutadock.mutation.ddg_calc_triple import calc_triple_ddg
+    from mutadock.mutation.ddg_calc_triple import get_mut_csv as _triple_mut_csv
     from mutadock.mutation.exceptions import MutationError
     from mutadock.mutation.generate_mutants import (
         generate_double_mutation,
@@ -65,12 +71,13 @@ except ImportError:
         generate_triple_mutation,
     )
     from mutadock.mutation.helpers import (
+        add_ddg_protocol_args,
         backup,
         clean_pdb,
         convert_cif_pdb,
         fetch_pdb,
         file_info,
-        permutations,
+        resolve_ddg_params,
         structure_warnings,
     )
 
@@ -93,13 +100,47 @@ def suppress_stdout() -> Any:
             sys.stdout = old_stdout
 
 
+def _expected_double_lines(single_csv: str, num: int) -> int:
+    """Line count (header + one row per combination) a *complete* double-ddG CSV
+    must have for the given inputs.
+
+    Mirrors ``calc_double_ddg`` exactly: it pairs the top-``num`` single-mutation
+    rows via ``combinations(_, 2)``, writing one row per pair plus a header. The
+    row source is read with the *same* ``get_mut_csv`` the calculation uses, so
+    the expected count can never drift from what is actually written. Returns
+    ``-1`` when the single CSV cannot be read, so the caller's equality check
+    fails safe (recompute rather than wrongly skip an incomplete file).
+    """
+    try:
+        k = len(_double_mut_csv(single_csv, int(num)))
+    except (OSError, KeyError):
+        return -1
+    return math.comb(k, 2) + 1
+
+
+def _expected_triple_lines(double_csv: str, num: int) -> int:
+    """Line count (header + one row per combination) a *complete* triple-ddG CSV
+    must have for the given inputs.
+
+    Mirrors ``calc_triple_ddg`` exactly: it extracts the unique single mutations
+    from the top-``num`` double rows and combines them via ``combinations(_, 3)``.
+    Uses the *same* ``get_mut_csv`` the calculation uses. Returns ``-1`` when the
+    double CSV cannot be read, so the caller fails safe (recompute).
+    """
+    try:
+        m = len(_triple_mut_csv(double_csv, int(num)))
+    except (OSError, KeyError):
+        return -1
+    return math.comb(m, 3) + 1
+
+
 def np_mutation() -> None:
     """Run the full single/double/triple mutation workflow for a PDB file.
 
     Orchestrates: PDB cleaning → mutation CSV → ddG calculation → sorting →
     double/triple ddG → mutant PDB generation.  All intermediate files are
-    written to the same directory as the input PDB.  CLI entry point for
-    ``md_mutate``.
+    written to ``--output-dir`` when given, otherwise to the same directory as
+    the input PDB.  CLI entry point for ``md_mutate``.
     """
     start_time = time.time()
     (
@@ -111,7 +152,20 @@ def np_mutation() -> None:
         num_triple_mut,
         append,
         quiet,
+        output_dir,
+        no_report,
+        ddg_params,
     ) = get_inputs()
+
+    # Resolve the output directory once.  Every output path below derives from
+    # ``full_pdb_path`` (via the converted/cleaned PDB), so redirecting those two
+    # files into ``out_dir`` cascades to the CSVs, mutant PDBs, mutation folder,
+    # and mutants.txt.  Default: alongside the input file (unchanged behavior).
+    if output_dir:
+        out_dir = Path(output_dir).expanduser().resolve()
+        out_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        out_dir = Path(full_pdb_path).parent
 
     # Convert CIF input to PDB up front.  The rest of the pipeline (clean_pdb,
     # BioPython PDBParser, PyRosetta) only understands PDB, so a .cif must be
@@ -119,7 +173,7 @@ def np_mutation() -> None:
     if Path(full_pdb_path).suffix.lower() == ".cif":
         if not quiet:
             logger.info(f"Converting CIF file {full_pdb_path} to PDB format.")
-        converted_pdb = str(Path(full_pdb_path).with_suffix(".pdb"))
+        converted_pdb = str(out_dir / f"{Path(full_pdb_path).stem}.pdb")
         # Preserve any pre-existing <stem>.pdb rather than silently overwriting it.
         backup(converted_pdb)
         with suppress_stdout():
@@ -135,7 +189,7 @@ def np_mutation() -> None:
     # Clean the PDB file
     if not quiet:
         logger.info(f"Cleaning the input file {full_pdb_path}")
-    cleaned_pdb = f"{Path(full_pdb_path).with_suffix('')}_clean.pdb"
+    cleaned_pdb = str(out_dir / f"{Path(full_pdb_path).stem}_clean.pdb")
     with suppress_stdout():
         clean_pdb(full_pdb_path, cleaned_pdb)
     if not quiet:
@@ -175,7 +229,16 @@ def np_mutation() -> None:
             logger.info("File already exists, skipping calculation of ddG values.")
     else:
         with suppress_stdout():
-            ddg_out = calc_ddg(full_pdb_path, mut_out, out_file=out_file)
+            # resume=append: if an earlier run was interrupted partway, keep the
+            # ΔΔG rows already computed and finish only the missing mutations
+            # (per-item checkpoint) instead of recomputing the whole file.
+            ddg_out = calc_ddg(
+                full_pdb_path,
+                mut_out,
+                out_file=out_file,
+                resume=append,
+                **ddg_params,
+            )
         if not quiet:
             logger.info(
                 f"ddG values for mutations calculated successfully and saved as {ddg_out}."
@@ -202,7 +265,8 @@ def np_mutation() -> None:
     if (
         file_info(out_csv)[0]
         and append
-        and file_info(out_csv)[1] == permutations(num_double_ddg, 2)
+        and file_info(out_csv)[1]
+        == _expected_double_lines(ddg_out_sort, num_double_ddg)
     ):
         double_ddg_out = out_csv
         if not quiet:
@@ -216,6 +280,8 @@ def np_mutation() -> None:
                 out_csv=out_csv,
                 single_csv=ddg_out_sort,
                 total=num_double_ddg,
+                resume=append,
+                **ddg_params,
             )
         if not quiet:
             logger.info(
@@ -229,7 +295,8 @@ def np_mutation() -> None:
     if (
         file_info(out_file)[0]
         and append
-        and file_info(out_file)[1] == permutations(num_double_ddg, 2)
+        and file_info(out_file)[1]
+        == _expected_double_lines(ddg_out_sort, num_double_ddg)
     ):
         double_ddg_out_sort = out_file
         if not quiet:
@@ -247,11 +314,16 @@ def np_mutation() -> None:
     # Calculate Triple ddG for the generated mutants
     if not quiet:
         logger.info(f"Calculating Triple ddG values for {double_ddg_out_sort}")
-    out_csv = f"{base_name}_triple_ddg.csv"
+    # calc_triple_ddg derives its default output name from the *_clean* PDB
+    # stem (unlike the double step, which uses base_name), so build the same
+    # name here and pass it explicitly — otherwise the skip check below would
+    # look for a file the calculation never writes and never resume.
+    out_csv = f"{full_pdb_path.removesuffix('.pdb')}_triple_ddg.csv"
     if (
         file_info(out_csv)[0]
         and append
-        and file_info(out_csv)[1] == permutations(num_triple_ddg, 3)
+        and file_info(out_csv)[1]
+        == _expected_triple_lines(double_ddg_out_sort, num_triple_ddg)
     ):
         triple_ddg_out = out_csv
         if not quiet:
@@ -263,8 +335,10 @@ def np_mutation() -> None:
             triple_ddg_out = calc_triple_ddg(
                 pdb_file=full_pdb_path,
                 double_csv=double_ddg_out_sort,
-                out_csv=None,
+                out_csv=out_csv,
                 total=num_triple_ddg,
+                resume=append,
+                **ddg_params,
             )
         if not quiet:
             logger.info(
@@ -278,14 +352,17 @@ def np_mutation() -> None:
     if (
         file_info(out_file)[0]
         and append
-        and file_info(out_file)[1] == permutations(num_triple_ddg, 3)
+        and file_info(out_file)[1]
+        == _expected_triple_lines(double_ddg_out_sort, num_triple_ddg)
     ):
         triple_ddg_out_sort = out_file
         if not quiet:
             logger.info("File already exists, skipping sorting of triple ddG values.")
     else:
         with suppress_stdout():
-            triple_ddg_out_sort = sort_csv(triple_ddg_out, col_num=11)
+            triple_ddg_out_sort = sort_csv(
+                triple_ddg_out, out_file=out_file, col_num=11
+            )
         if not quiet:
             logger.info(
                 f"Triple ddG values are sorted and stored as {triple_ddg_out_sort}"
@@ -333,17 +410,36 @@ def np_mutation() -> None:
     if not quiet:
         logger.info(f"Generated triple mutations PDB in {out_folder}")
 
+    # Auto-generate the HTML + PPTX report from everything just written.  Report
+    # failures must never fail the run, so this is best-effort.
+    if not no_report:
+        if not quiet:
+            logger.info("Generating report (report.html + report.pptx)")
+        try:
+            from mutadock.report.report import generate_report
+
+            written = generate_report(str(out_dir), quiet=quiet)
+            for fmt, path in written.items():
+                logger.info(f"{fmt.upper()} report written: {path}")
+        except Exception as e:
+            logger.warning(
+                f"Report generation failed (run outputs are unaffected): {e}"
+            )
+
     end_time = time.time()
     elapsed_time = (end_time - start_time) / 60
     logger.info(f"Completed in {elapsed_time:.2f} minutes!")
 
 
-def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
+def get_inputs() -> (
+    tuple[str, int, int, int, int, int, bool, bool, Optional[str], bool, dict]
+):
     """Parse CLI arguments for ``md_mutate``.
 
     Returns:
         ``(pdb_path, num_double_ddg, num_single_mut, num_double_mut,
-        num_triple_ddg, num_triple_mut, append, quiet)``
+        num_triple_ddg, num_triple_mut, append, quiet, output_dir, no_report,
+        ddg_params)`` where ``ddg_params`` are the resolved ΔΔG protocol kwargs.
     """
     parser = argparse.ArgumentParser(
         prog="np_mutation",
@@ -404,10 +500,27 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
         default=15,
     )
     parser.add_argument(
+        "-o",
+        "--output-dir",
+        dest="output_dir",
+        help="Directory to write all output files to "
+        "(Default: alongside the input PDB/CIF file).",
+        metavar="DIR",
+        default=None,
+    )
+    parser.add_argument(
         "--no-append",
         dest="no_append",
         help="Regenerate all output files even if they already exist "
         "(Default: reuse existing files).",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--no-report",
+        dest="no_report",
+        help="Skip auto-generating the HTML + PPTX report at the end of the run "
+        "(Default: generate report.html and report.pptx).",
         action="store_true",
         default=False,
     )
@@ -417,6 +530,7 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
         action="store_true",
         default=False,
     )
+    add_ddg_protocol_args(parser)
 
     args = parser.parse_args()
 
@@ -452,6 +566,9 @@ def get_inputs() -> tuple[str, int, int, int, int, int, bool, bool]:
         args.tpm,
         not args.no_append,
         args.quiet,
+        args.output_dir,
+        args.no_report,
+        resolve_ddg_params(args),
     )
 
 
