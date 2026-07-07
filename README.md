@@ -42,6 +42,37 @@ AutoDock Vina must be installed separately — see [Vina installation](https://a
 
 ## Installation
 
+### Option A: Docker (recommended)
+
+PyRosetta, OpenMM, PDBFixer, RDKit, and AutoDock Vina all have heavy native
+dependencies that are easy to get wrong with a plain `pip install`. The
+bundled `Dockerfile` builds a complete, working environment (conda-forge
+stack + PyRosetta) in one step:
+
+```bash
+docker build -t mutadock .
+docker run --rm -it mutadock md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib
+```
+
+Mount your own files and collect outputs on the host:
+
+```bash
+docker run --rm -it -v "$PWD/work:/work" -w /work mutadock md_mutate -i /work/protein.pdb
+```
+
+### Option B: conda
+
+`environment.yml` pins the full stack via conda-forge, including the
+AutoDock Vina Python bindings (`vina`):
+
+```bash
+conda env create -f environment.yml
+conda activate mutadock
+python -c "import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()"
+```
+
+### Option C: pip
+
 ```bash
 pip install mutadock
 ```
@@ -49,7 +80,8 @@ pip install mutadock
 Install PyRosetta (required for ΔΔG calculations):
 
 ```bash
-md_install_dependencies
+python -m pip install pyrosetta_installer
+python -c "import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()"
 ```
 
 Install receptor preparation dependencies (conda recommended for pdbfixer/openmm):
@@ -375,9 +407,10 @@ pip install pdbfixer openmm
 ```
 
 **PyRosetta fails to install**
-Run the bundled installer which handles license and platform detection:
+Run the installer, which handles license and platform detection:
 ```bash
-md_install_dependencies
+python -m pip install pyrosetta_installer
+python -c "import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()"
 ```
 
 **`vina: command not found`**

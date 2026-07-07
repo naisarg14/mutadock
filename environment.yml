@@ -1,0 +1,43 @@
+name: mutadock
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - pandas
+  - pyarrow
+  - matplotlib
+  - biopython
+  - openmm
+  - pdbfixer
+  - rdkit
+  - meeko
+  - vina
+  - tqdm
+  - python-pptx
+  - jinja2
+  - pip:
+      - pyrosetta-installer
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+#   conda env create -f environment.yml
+#   conda activate mutadock
+#   pip install .            # installs mutadock itself + its CLI entry points
+#
+# PyRosetta is not distributed on conda-forge (custom academic/commercial
+# license), so it can't be pinned as a regular dependency above. Install it
+# once the env is active:
+#   python -c "import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()"
+#
+# AutoDock Vina is pinned above via the conda-forge "vina" package (Python
+# bindings used by mutadock's docking module) — no separate Vina install
+# needed.
+#
+# AutoSite (ADFRsuite), used by `md_quick` for automatic pocket detection
+# when no config file is given, is not packaged on conda-forge/PyPI. Download
+# it separately from https://ccsb.scripps.edu/adfr/downloads/ and put its
+# `bin/` directory on PATH, or always pass `-c config.txt` / `--ligand-file`
+# with an explicit box to skip it.
