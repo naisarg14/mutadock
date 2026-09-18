@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-09-18
+
+### Changed
+- Updated the PyPI and GitHub README for the 2.2 release series, including current docking outputs, reproducibility controls, resume behavior, input warnings, matrix caching, and subprocess timeout settings.
+- Removed the stale fixed-score example and hard-coded coverage badge from the README.
+
 ## [2.2.0] - 2026-09-18
 
 ### Added

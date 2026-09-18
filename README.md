@@ -26,7 +26,7 @@ MUTADOCK is a comprehensive library for protein mutation studies and multi-recep
 - Simple CLI for each workflow step
 - Python API for scripting and integration into existing pipelines
 
-### What's new in 2.2.0
+### What's new in the 2.2 series
 
 - Reproducible docking with a configurable random seed (default `19`) and complete run provenance in `docking_results.csv`
 - Safer input validation, including ligand 3D/hydrogen checks and warnings for multi-model, multi-chain, similar-chain, altloc, and insertion-code structures
