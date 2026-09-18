@@ -25,8 +25,10 @@ from typing import Optional
 
 try:
     from .exceptions import DockingRunError
+    from .vina_helper import DEFAULT_VINA_SEED
 except ImportError:
     from exceptions import DockingRunError  # type: ignore[no-redef]
+    from vina_helper import DEFAULT_VINA_SEED  # type: ignore[no-redef]
 
 # Configure logging
 logging.basicConfig(
@@ -45,6 +47,7 @@ def vina_dock(
     n_poses: int = 20,
     n_poses_write: int = 5,
     overwrite: bool = True,
+    seed: int = DEFAULT_VINA_SEED,
 ) -> None:
     """Perform molecular docking using the AutoDock Vina Python bindings.
 
@@ -65,6 +68,10 @@ def vina_dock(
         n_poses: Number of binding poses to generate internally (default 20).
         n_poses_write: Number of top poses to write to *output* (default 5).
         overwrite: If ``True``, overwrite an existing *output* file.
+        seed: Vina RNG seed (default :data:`~mutadock.docking.vina_helper.
+            DEFAULT_VINA_SEED`).  Passing ``0`` restores Vina's own behaviour of
+            picking a random seed, which makes the run non-reproducible -- only
+            do that deliberately.
 
     Raises:
         DockingRunError: If inputs are missing or the Vina run fails.
@@ -91,7 +98,16 @@ def vina_dock(
 
     try:
         logger.info("Docking using mutadock library by Naisarg Patel (@naisarg14)")
-        v = Vina(sf_name="vina")
+        if seed == 0:
+            logger.warning(
+                "seed=0 tells Vina to pick a random seed -- this run will NOT be "
+                "reproducible. Pass a non-zero seed unless that is intended."
+            )
+        logger.info(
+            "Vina settings: seed=%d, exhaustiveness=%d, n_poses=%d",
+            seed, exhaustiveness, n_poses,
+        )
+        v = Vina(sf_name="vina", seed=seed)
 
         v.set_receptor(receptor)
         v.set_ligand_from_file(ligand)
@@ -163,6 +179,14 @@ def main() -> None:
         help="Number of poses to write (default: 5)",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_VINA_SEED,
+        help=f"Vina RNG seed (default: {DEFAULT_VINA_SEED}). Change it to produce "
+        f"an independent replicate; 0 means 'random seed', which is not "
+        f"reproducible.",
+    )
+    parser.add_argument(
         "--overwrite",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -182,6 +206,7 @@ def main() -> None:
             n_poses=args.n_poses,
             n_poses_write=args.n_poses_write,
             overwrite=args.overwrite,
+            seed=args.seed,
         )
     except DockingRunError as e:
         logger.error(str(e))

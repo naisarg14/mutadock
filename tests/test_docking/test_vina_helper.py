@@ -391,6 +391,79 @@ class TestPrepareLigand(unittest.TestCase):
             with self.assertRaises(LigandPreparationError):
                 vina_helper.prepare_ligand(in_file)
 
+    def test_addhs_requests_coordinates(self):
+        """AddHs MUST pass addCoords=True.
+
+        Regression test for the 2026-07-31 bug: without it RDKit adds hydrogens
+        as topology only and meeko writes them all at the origin, which puts the
+        polar/donor hydrogens outside the docking box and changes the Vina score
+        (imatinib/2HYY WT: -12.22 -> -12.55 kcal/mol once fixed).
+        """
+        in_file = str(self.tmpdir / "lig.sdf")
+        Path(in_file).write_text("mol")
+        meeko_stub, rdkit_stub = self._stubs()
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            vina_helper.prepare_ligand(in_file)
+        _, kwargs = rdkit_stub.Chem.AddHs.call_args
+        self.assertTrue(
+            kwargs.get("addCoords"),
+            "prepare_ligand must call Chem.AddHs(..., addCoords=True); without it "
+            "every added hydrogen is written at (0, 0, 0).",
+        )
+
+
+class TestPrepareLigandRealRDKit(unittest.TestCase):
+    """End-to-end check with the real rdkit/meeko, if they are installed.
+
+    The stub test above pins the call signature; this one pins the property we
+    actually care about — that no atom ends up at the origin.
+    """
+
+    def setUp(self):
+        self.tmpdir = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_no_atom_written_at_origin(self):
+        try:
+            from rdkit import Chem
+            from rdkit.Chem import AllChem
+        except ImportError:
+            self.skipTest("rdkit not installed")
+        try:
+            import meeko  # noqa: F401
+        except ImportError:
+            self.skipTest("meeko not installed")
+
+        # A small molecule with polar hydrogens, embedded well away from the
+        # origin so a coordinate-less hydrogen is unambiguous.
+        mol = Chem.AddHs(Chem.MolFromSmiles("OCCN"))
+        self.assertEqual(AllChem.EmbedMolecule(mol, randomSeed=1), 0)
+        conf = mol.GetConformer()
+        for i in range(mol.GetNumAtoms()):
+            p = conf.GetAtomPosition(i)
+            conf.SetAtomPosition(i, (p.x + 25.0, p.y + 25.0, p.z + 25.0))
+
+        sdf = self.tmpdir / "lig.sdf"
+        w = Chem.SDWriter(str(sdf))
+        w.write(Chem.RemoveHs(mol))
+        w.close()
+
+        pdbqt = vina_helper.prepare_ligand(str(sdf))
+
+        at_origin = [
+            line
+            for line in pdbqt.splitlines()
+            if line.startswith(("ATOM", "HETATM"))
+            and all(abs(float(line[30 + 8 * i : 38 + 8 * i])) < 1e-6 for i in range(3))
+        ]
+        self.assertEqual(
+            at_origin, [], f"{len(at_origin)} atom(s) written at the origin"
+        )
+
 
 # ===========================================================================
 # TestPrepareReceptor
@@ -560,11 +633,14 @@ class TestAddScoreToCsv(unittest.TestCase):
         vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
         self.assertTrue(Path(self.csv_file).is_file())
 
+    BOX_COLS = ["center_x", "center_y", "center_z",
+                "size_x", "size_y", "size_z", "exhaustiveness", "seed"]
+
     def test_header_written_on_creation(self):
         vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
         with open(self.csv_file) as f:
             rows = list(csv.reader(f))
-        self.assertEqual(rows[0], ["sr", "name", "affinity"])
+        self.assertEqual(rows[0], ["sr", "name", "affinity", *self.BOX_COLS])
 
     def test_first_data_row_has_sr_1(self):
         vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
@@ -587,8 +663,70 @@ class TestAddScoreToCsv(unittest.TestCase):
         vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -6.0)
         with open(self.csv_file) as f:
             rows = list(csv.reader(f))
-        self.assertEqual(rows[0], ["sr", "name", "affinity"])
+        self.assertEqual(rows[0], ["sr", "name", "affinity", *self.BOX_COLS])
         self.assertEqual(len(rows), 3)
+
+    def test_box_parameters_recorded_when_supplied(self):
+        vina_helper.add_score_to_csv(
+            self.out_pdb, self.csv_file, -7.5,
+            center=[1.2345, 2.0, 3.0], box_size=[20.0, 21.0, 22.0], exhaustiveness=8,
+            seed=19,
+        )
+        with open(self.csv_file) as f:
+            row = list(csv.reader(f))[1]
+        self.assertEqual(
+            row[3:], ["1.234", "2.0", "3.0", "20.0", "21.0", "22.0", "8", "19"]
+        )
+
+    def test_box_columns_blank_when_not_supplied(self):
+        vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
+        with open(self.csv_file) as f:
+            row = list(csv.reader(f))[1]
+        self.assertEqual(row[3:], [""] * 8)
+
+    def test_seed_recorded_in_its_own_column(self):
+        """An affinity without its seed cannot be reproduced -- see the seed
+        rationale on DEFAULT_VINA_SEED."""
+        vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5, seed=1234)
+        with open(self.csv_file) as f:
+            header, row = list(csv.reader(f))[:2]
+        self.assertEqual(row[header.index("seed")], "1234")
+
+    def test_appending_to_preseed_csv_truncates_instead_of_going_ragged(self):
+        """A CSV written before the seed column existed has 10 columns.
+
+        Appending an 11-column row would make it ragged, so the row is truncated
+        to the width already on disk (and the loss is logged).
+        """
+        pre_seed_header = (
+            "sr,name,affinity,center_x,center_y,center_z,"
+            "size_x,size_y,size_z,exhaustiveness"
+        )
+        with open(self.csv_file, "w") as f:
+            f.write(f"{pre_seed_header}\n1,old,-9.0,1.0,2.0,3.0,20.0,20.0,20.0,8\n")
+        with self.assertLogs(vina_helper.logger, level="WARNING"):
+            vina_helper.add_score_to_csv(
+                self.out_pdb, self.csv_file, -7.5,
+                center=[1.0, 2.0, 3.0], box_size=[20.0, 20.0, 20.0],
+                exhaustiveness=8, seed=19,
+            )
+        with open(self.csv_file) as f:
+            rows = list(csv.reader(f))
+        self.assertTrue(all(len(r) == 10 for r in rows), rows)
+
+    def test_appending_to_legacy_three_column_csv_stays_three_columns(self):
+        # Pre-existing CSVs written before box recording must not become ragged.
+        with open(self.csv_file, "w") as f:
+            f.write("sr,name,affinity\n1,old_run,-9.0\n")
+        vina_helper.add_score_to_csv(
+            self.out_pdb, self.csv_file, -7.5,
+            center=[1.0, 2.0, 3.0], box_size=[20.0, 20.0, 20.0], exhaustiveness=8,
+        )
+        with open(self.csv_file) as f:
+            rows = list(csv.reader(f))
+        self.assertEqual(rows[0], ["sr", "name", "affinity"])
+        self.assertTrue(all(len(r) == 3 for r in rows))
+        self.assertEqual(rows[2][0], "2")
 
     def test_name_derived_by_removing_out_pdb_suffix(self):
         out = str(self.tmpdir / "rec_lig_out.pdb")
@@ -661,10 +799,20 @@ class TestReadConfig(unittest.TestCase):
         result = vina_helper.read_config(path)
         self.assertAlmostEqual(result[0][0], 5.0)
 
-    def test_returns_six_element_tuple_on_success(self):
+    def test_returns_seven_element_tuple_on_success(self):
         path = self._write_config("")
         result = vina_helper.read_config(path)
-        self.assertEqual(len(result), 6)
+        self.assertEqual(len(result), 7)
+
+    def test_seed_defaults_to_library_default(self):
+        path = self._write_config("")
+        self.assertEqual(
+            vina_helper.read_config(path)[6], vina_helper.DEFAULT_VINA_SEED
+        )
+
+    def test_seed_read_from_config(self):
+        path = self._write_config("seed = 1234")
+        self.assertEqual(vina_helper.read_config(path)[6], 1234)
 
     def test_exhaustiveness_default_is_32(self):
         path = self._write_config("")
@@ -716,6 +864,37 @@ class TestDockVina(unittest.TestCase):
         cmd = mock_run.call_args[0][0]
         self.assertIn(self.receptor, cmd)
         self.assertIn(self.ligand, cmd)
+
+    def test_default_seed_forwarded_to_subprocess(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(self.receptor, self.ligand, self.output, self.log)
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("--seed", cmd)
+        self.assertEqual(
+            cmd[cmd.index("--seed") + 1], str(vina_helper.DEFAULT_VINA_SEED)
+        )
+
+    def test_explicit_seed_forwarded_to_subprocess(self):
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log, seed=777
+            )
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("--seed") + 1], "777")
+
+    def test_config_seed_overrides_argument(self):
+        """A config file is the authority on every other parameter, so it must
+        be the authority on the seed too -- otherwise a run configured by file
+        and a run configured by argument silently differ."""
+        cfg = self.tmpdir / "vina.conf"
+        cfg.write_text("center_x = 1\ncenter_y = 2\ncenter_z = 3\nseed = 555\n")
+        with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
+            vina_helper.dock_vina(
+                self.receptor, self.ligand, self.output, self.log,
+                config=str(cfg), seed=111,
+            )
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd[cmd.index("--seed") + 1], "555")
 
     def test_no_overwrite_flag_added_when_overwrite_false(self):
         with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:

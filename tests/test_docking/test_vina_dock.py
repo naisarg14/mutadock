@@ -125,6 +125,36 @@ class TestVinaDock(unittest.TestCase):
         )
 
     # ------------------------------------------------------------------ #
+    # Seed                                                                 #
+    # ------------------------------------------------------------------ #
+
+    def test_default_seed_passed_to_vina_constructor(self):
+        """Vina's own default is seed=0 == 'random', which makes a run
+        irreproducible. mutadock must pass an explicit seed instead."""
+        stub, mock_cls, _ = _make_vina_stub()
+        with patch.dict(sys.modules, {"vina": stub}):
+            vina_dock.vina_dock(self.receptor, self.ligand, self.output)
+        mock_cls.assert_called_once_with(
+            sf_name="vina", seed=vina_helper.DEFAULT_VINA_SEED
+        )
+
+    def test_default_seed_is_19(self):
+        self.assertEqual(vina_helper.DEFAULT_VINA_SEED, 19)
+
+    def test_explicit_seed_overrides_default(self):
+        stub, mock_cls, _ = _make_vina_stub()
+        with patch.dict(sys.modules, {"vina": stub}):
+            vina_dock.vina_dock(self.receptor, self.ligand, self.output, seed=4242)
+        mock_cls.assert_called_once_with(sf_name="vina", seed=4242)
+
+    def test_seed_zero_warns_about_reproducibility(self):
+        stub, _, _ = _make_vina_stub()
+        with patch.dict(sys.modules, {"vina": stub}):
+            with self.assertLogs(vina_dock.logger, level="WARNING") as cm:
+                vina_dock.vina_dock(self.receptor, self.ligand, self.output, seed=0)
+        self.assertIn("reproducible", " ".join(cm.output))
+
+    # ------------------------------------------------------------------ #
     # Failure paths                                                        #
     # ------------------------------------------------------------------ #
 

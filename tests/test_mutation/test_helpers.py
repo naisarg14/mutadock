@@ -244,6 +244,58 @@ def test_structure_warnings_missing_file_is_silent(tmp_path: Path):
     assert structure_warnings(str(tmp_path / "does_not_exist.pdb")) == []
 
 
+def _ca_atom(serial, chain, resseq, resname):
+    """Build a column-correct CA ATOM line (same layout as ``_atom``)."""
+    return (
+        f"ATOM  {serial:>5} CA   {resname:>3} {chain}{resseq:>4} "
+        "   11.104  13.207  10.567  1.00  0.00           C\n"
+    )
+
+
+def _chain_block(chain: str, resnames: list[str], start_serial: int) -> str:
+    return "".join(
+        _ca_atom(start_serial + i, chain, i + 1, rn) for i, rn in enumerate(resnames)
+    )
+
+
+_DISTINCT_SEQ_A = ["ALA", "GLY", "SER", "LEU", "VAL", "THR"]
+_DISTINCT_SEQ_B = ["TRP", "PHE", "TYR", "MET", "CYS", "PRO"]
+
+
+def test_structure_warnings_single_chain_no_warning(tmp_path: Path):
+    pdb = _write(
+        tmp_path, "single.pdb", _chain_block("A", _DISTINCT_SEQ_A, 1) + "END\n"
+    )
+    assert structure_warnings(pdb) == []
+
+
+def test_structure_warnings_multi_chain(tmp_path: Path):
+    pdb = _write(
+        tmp_path,
+        "multi.pdb",
+        _chain_block("A", _DISTINCT_SEQ_A, 1)
+        + _chain_block("B", _DISTINCT_SEQ_B, len(_DISTINCT_SEQ_A) + 1)
+        + "END\n",
+    )
+    warnings = structure_warnings(pdb)
+    assert any("2 chains (A, B)" in w for w in warnings)
+    # Sequences differ, so no homo-oligomer-style similarity warning.
+    assert not any("are similar in the input" in w for w in warnings)
+
+
+def test_structure_warnings_similar_chains(tmp_path: Path):
+    pdb = _write(
+        tmp_path,
+        "dimer.pdb",
+        _chain_block("A", _DISTINCT_SEQ_A, 1)
+        + _chain_block("B", _DISTINCT_SEQ_A, len(_DISTINCT_SEQ_A) + 1)
+        + "END\n",
+    )
+    warnings = structure_warnings(pdb)
+    assert any("2 chains (A, B)" in w for w in warnings)
+    assert any("Chains A, B are similar in the input" in w for w in warnings)
+
+
 # ---------------------------------------------------------------------------
 # 3.4: format_missing_residue — actionable "not found" messages
 # ---------------------------------------------------------------------------

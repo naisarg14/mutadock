@@ -130,3 +130,11 @@ mutation_*/
 
 # Timestamped backups created by backup()
 backups/
+
+# =============================================================================
+# Project-specific: benchmark cross-validation reference dirs
+# (already covered by the wholesale benchmark/ ignore above; listed explicitly
+# so they stay ignored even if benchmark/ scripts are ever un-ignored)
+# =============================================================================
+benchmark/foldx_ref/
+benchmark/mcsm_lig_ref/

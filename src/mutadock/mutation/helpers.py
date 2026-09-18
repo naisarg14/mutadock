@@ -20,6 +20,7 @@
 
 import argparse
 import csv
+import difflib
 import logging
 import os
 import re
@@ -431,14 +432,61 @@ def fetch_pdb(pdb_id: str, dest_dir: Optional[str | Path] = None) -> str:
     return str(dest)
 
 
+# Minimum CA count for a chain to be treated as a polymer chain rather than a
+# stray HETATM/ligand chain when counting/comparing chains.
+_MIN_POLYMER_RESIDUES = 5
+# difflib.SequenceMatcher ratio above which two chains are considered
+# copies of each other (e.g. subunits of a homodimer/tetramer).
+_CHAIN_SIMILARITY_THRESHOLD = 0.9
+
+
+def _similar_chain_groups(sequences: dict[str, str]) -> list[list[str]]:
+    """Cluster chains whose one-letter sequences are near-identical.
+
+    Union-find over all pairs scoring >= ``_CHAIN_SIMILARITY_THRESHOLD`` on
+    ``difflib.SequenceMatcher``, a fast heuristic (no alignment) good enough
+    to flag likely homo-oligomer copies for a warning.
+
+    Returns:
+        Groups (chain ID lists) of size > 1, i.e. only the clusters worth
+        flagging.
+    """
+    chains = sorted(sequences)
+    parent = {c: c for c in chains}
+
+    def find(c: str) -> str:
+        while parent[c] != c:
+            c = parent[c]
+        return c
+
+    for i, a in enumerate(chains):
+        for b in chains[i + 1 :]:
+            ratio = difflib.SequenceMatcher(None, sequences[a], sequences[b]).ratio()
+            if ratio >= _CHAIN_SIMILARITY_THRESHOLD:
+                ra, rb = find(a), find(b)
+                if ra != rb:
+                    parent[ra] = rb
+
+    groups: dict[str, list[str]] = {}
+    for c in chains:
+        groups.setdefault(find(c), []).append(c)
+    return [g for g in groups.values() if len(g) > 1]
+
+
 def structure_warnings(pdb_file: str) -> list[str]:
-    """Detect structural features that silently affect residue numbering.
+    """Detect structural features that silently affect residue numbering or
+    runtime, and warn about them up front.
 
     Scans a PDB file for multi-model ensembles (e.g. NMR), alternate location
     indicators (altlocs), and residue insertion codes — each of which can make
     the integer residue numbering used for mutations ambiguous.  Must be run on
     the *original* structure: ``clean_pdb`` drops ``MODEL`` records, so a cleaned
     file would never report a multi-model warning.
+
+    Also flags multi-chain inputs: every extra polymer chain is scored/mutated
+    right alongside the chain(s) of interest, so more chains means
+    substantially longer runs; and chains with near-identical sequences (e.g.
+    a homodimer/tetramer) are redundant copies for a single-chain analysis.
 
     Args:
         pdb_file: Path to the PDB file to inspect.
@@ -449,6 +497,8 @@ def structure_warnings(pdb_file: str) -> list[str]:
     model_count = 0
     altlocs: set[str] = set()
     insertion_residues: set[tuple[str, str, str]] = set()
+    seen_ca: set[tuple[str, str, str]] = set()
+    chain_seq: dict[str, list[str]] = {}
     try:
         with open(pdb_file) as f:
             for line in f:
@@ -463,6 +513,15 @@ def structure_warnings(pdb_file: str) -> list[str]:
                         chain = line[21:22]
                         resseq = line[22:26].strip()
                         insertion_residues.add((chain, resseq, icode))
+                    if line.startswith("ATOM") and line[12:16].strip() == "CA":
+                        chain = line[21:22]
+                        resseq = line[22:26].strip()
+                        key = (chain, resseq, icode)
+                        if key not in seen_ca:
+                            seen_ca.add(key)
+                            one = get_1(line[17:20].strip())
+                            if one is not None:
+                                chain_seq.setdefault(chain, []).append(one)
     except OSError:
         return []
 
@@ -484,6 +543,26 @@ def structure_warnings(pdb_file: str) -> list[str]:
             "insertion codes; insertion codes are not reflected in the integer "
             "residue numbering used for mutations."
         )
+
+    sequences = {c: "".join(r) for c, r in chain_seq.items()}
+    polymer_chains = sorted(
+        c for c, seq in sequences.items() if len(seq) >= _MIN_POLYMER_RESIDUES
+    )
+    if len(polymer_chains) > 1:
+        warnings.append(
+            f"Structure contains {len(polymer_chains)} chains "
+            f"({', '.join(polymer_chains)}); every chain is mutated/scored "
+            "alongside the one(s) you care about, which can make runs take "
+            "much longer — consider keeping only the chain(s) of interest."
+        )
+        for group in _similar_chain_groups(
+            {c: sequences[c] for c in polymer_chains}
+        ):
+            warnings.append(
+                f"Chains {', '.join(group)} are similar in the input (e.g. a "
+                "dimer/tetramer); recommend checking and keeping only one-two "
+                "of them for the analysis to ensure compute isn't wasted."
+            )
     return warnings
 
 

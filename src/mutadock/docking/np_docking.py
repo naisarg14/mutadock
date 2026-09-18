@@ -39,6 +39,7 @@ try:
         ReceptorPreparationError,
     )
     from .vina_helper import (
+        DEFAULT_VINA_SEED,
         add_score_to_csv,
         backup,
         calculate_geometric_center,
@@ -59,6 +60,7 @@ except ImportError:
         ReceptorPreparationError,
     )
     from vina_helper import (  # type: ignore[no-redef]
+        DEFAULT_VINA_SEED,
         add_score_to_csv,
         backup,
         calculate_geometric_center,
@@ -114,6 +116,7 @@ def np_docking() -> None:
         ignore_existing,
         output_dir_arg,
         no_report,
+        seed_arg,
     ) = prepare_inputs()
 
     center: Optional[list[float]] = None
@@ -122,22 +125,62 @@ def np_docking() -> None:
     n_poses: int = 20
     n_poses_write: int = 5
     overwrite: bool = True
+    seed: int = DEFAULT_VINA_SEED
     use_autosite_binary: bool = False
 
     if config is not None:
         try:
-            center, box_size, exhaustiveness, n_poses, n_poses_write, overwrite = (
-                read_config(config)
-            )
+            (
+                center,
+                box_size,
+                exhaustiveness,
+                n_poses,
+                n_poses_write,
+                overwrite,
+                seed,
+            ) = read_config(config)
         except ConfigError as e:
             sys.exit(f"Error while reading the config file {config}\nError: {e}")
 
+    # An explicit --seed wins over a config file, but never silently: this
+    # codebase has already been burned once by -a quietly overriding -c.
+    if seed_arg is not None:
+        if config is not None and seed_arg != seed:
+            logger.info(
+                "--seed %d overrides 'seed = %d' from %s", seed_arg, seed, config
+            )
+        seed = seed_arg
+    logger.info("Vina seed for this run: %d", seed)
+    if seed == 0:
+        logger.warning(
+            "seed=0 means Vina picks a random seed -- this run will NOT be "
+            "reproducible."
+        )
+
     if autosite is not None:
+        # -a used to override -c silently, so a run could be configured with an
+        # explicit box and still be docked somewhere else entirely with no notice
+        # in the output. Refuse the ambiguity instead of picking one.
+        if config is not None:
+            sys.exit(
+                "Error: both -c/--config and -a/--autosite were given, and they "
+                "define different search boxes.\n"
+                f"  config  {config} -> center {center}, size {box_size}\n"
+                f"  autosite {autosite}\n"
+                "Pass exactly one. (-a derives the box from an AutoSite cluster "
+                "PDB; -c states it explicitly.)"
+            )
         try:
             center = list(calculate_geometric_center(autosite))
             radius = calculate_radius(autosite)
             box_dim = radius * 2 + DEFAULT_BOX_MARGIN
             box_size = [box_dim, box_dim, box_dim]
+            if not quiet:
+                logger.info(
+                    f"Box from AutoSite file {autosite}: center {[round(v, 3) for v in center]}, "
+                    f"size {round(box_dim, 3)} (radius {round(radius, 3)} + margin "
+                    f"{DEFAULT_BOX_MARGIN})"
+                )
         except Exception as e:
             sys.exit(
                 f"Error while calculating the geometric center of the autosite file {autosite}\nError: {e}"
@@ -309,6 +352,7 @@ def np_docking() -> None:
                         cfg.write(f"n_poses = {n_poses}\n")
                         cfg.write(f"n_poses_write = {n_poses_write}\n")
                         cfg.write(f"overwrite = {overwrite}\n")
+                        cfg.write(f"seed = {seed}\n")
                     if not quiet:
                         logger.info(f"Wrote AutoSite config: {config_path}")
 
@@ -339,6 +383,7 @@ def np_docking() -> None:
                         n_poses=n_poses,
                         n_poses_write=n_poses_write,
                         overwrite=overwrite,
+                        seed=seed,
                     )
             except DockingRunError as e:
                 logger.error(
@@ -355,7 +400,19 @@ def np_docking() -> None:
             if not quiet:
                 logger.info("Adding affinity to CSV")
             try:
-                add_score_to_csv(out_sdf, csv_file, score)
+                # Record the box THIS pair was docked in. loop_center/loop_box_size
+                # can differ per receptor (per-receptor AutoSite branch above), and
+                # affinities from different boxes are not comparable -- so the box
+                # must travel with the score, not be assumed constant.
+                add_score_to_csv(
+                    out_sdf,
+                    csv_file,
+                    score,
+                    center=loop_center,
+                    box_size=loop_box_size,
+                    exhaustiveness=exhaustiveness,
+                    seed=seed,
+                )
             except DockingError as e:
                 logger.error(
                     f"Error while adding affinity to CSV file {csv_file}\nError: {e}"
@@ -409,15 +466,19 @@ def prepare_inputs() -> tuple[
     bool,
     Optional[Path],
     bool,
+    Optional[int],
 ]:
     """Parse CLI arguments for ``md_dock``.
 
     Returns:
         ``(receptors, ligands, config, autosite, quiet, completed_name,
-        ignore_existing, output_dir, no_report)`` where *receptors* and
+        ignore_existing, output_dir, no_report, seed)`` where *receptors* and
         *ligands* are lists of absolute file paths read from the provided text
         files, *output_dir* is the resolved ``--output-dir`` (``None`` if not
-        given), and *no_report* skips report generation when ``True``.
+        given), *no_report* skips report generation when ``True``, and *seed* is
+        the explicit ``--seed`` value or ``None`` when the user did not pass one
+        (so the caller can tell "not given" from "given the default", and let a
+        config file's ``seed`` stand).
     """
     parser = argparse.ArgumentParser(
         prog="np_dock",
@@ -465,6 +526,15 @@ def prepare_inputs() -> tuple[
         "--ignore_existing",
         action="store_true",
         help="Run the Docking while ignoring existing files. All dockings will be performed again. (default: False).",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help=f"Vina RNG seed applied to EVERY docking in this run "
+        f"(default: {DEFAULT_VINA_SEED}). Overrides 'seed =' in a config file. "
+        f"Change it to produce an independent replicate of the whole pipeline; "
+        f"0 means 'random seed', which is not reproducible.",
     )
     parser.add_argument(
         "--no-report",
@@ -530,6 +600,7 @@ def prepare_inputs() -> tuple[
         args.ignore_existing,
         output_dir,
         args.no_report,
+        args.seed,
     )
 
 

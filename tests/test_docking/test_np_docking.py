@@ -61,13 +61,13 @@ class TestPrepareInputs(unittest.TestCase):
 
     def test_receptors_loaded_from_file(self):
         with patch("sys.argv", _argv("-r", self.rec_txt, "-l", self.lig_txt)):
-            receptors, _, _, _, _, _, _, _, _ = np_docking.prepare_inputs()
+            receptors, _, _, _, _, _, _, _, _, _ = np_docking.prepare_inputs()
         self.assertEqual(len(receptors), 1)
         self.assertIn("receptor.pdb", receptors[0])
 
     def test_ligands_loaded_from_file(self):
         with patch("sys.argv", _argv("-r", self.rec_txt, "-l", self.lig_txt)):
-            _, ligands, _, _, _, _, _, _, _ = np_docking.prepare_inputs()
+            _, ligands, _, _, _, _, _, _, _, _ = np_docking.prepare_inputs()
         self.assertEqual(len(ligands), 1)
         self.assertIn("ligand.sdf", ligands[0])
 
@@ -77,29 +77,29 @@ class TestPrepareInputs(unittest.TestCase):
         with open(rel_rec_txt, "w") as f:
             f.write("receptor.pdb\n")
         with patch("sys.argv", _argv("-r", rel_rec_txt, "-l", self.lig_txt)):
-            receptors, _, _, _, _, _, _, _, _ = np_docking.prepare_inputs()
+            receptors, _, _, _, _, _, _, _, _, _ = np_docking.prepare_inputs()
         self.assertTrue(Path(receptors[0]).is_absolute())
 
     def test_completed_filename_derived_from_stems(self):
         with patch("sys.argv", _argv("-r", self.rec_txt, "-l", self.lig_txt)):
-            _, _, _, _, _, completed_name, _, _, _ = np_docking.prepare_inputs()
+            _, _, _, _, _, completed_name, _, _, _, _ = np_docking.prepare_inputs()
         self.assertIn("recs", completed_name)
         self.assertIn("ligs", completed_name)
         self.assertIn("completed", completed_name)
 
     def test_quiet_flag_defaults_to_false(self):
         with patch("sys.argv", _argv("-r", self.rec_txt, "-l", self.lig_txt)):
-            _, _, _, _, quiet, _, _, _, _ = np_docking.prepare_inputs()
+            _, _, _, _, quiet, _, _, _, _, _ = np_docking.prepare_inputs()
         self.assertFalse(quiet)
 
     def test_quiet_flag_set_when_passed(self):
         with patch("sys.argv", _argv("-r", self.rec_txt, "-l", self.lig_txt, "-q")):
-            _, _, _, _, quiet, _, _, _, _ = np_docking.prepare_inputs()
+            _, _, _, _, quiet, _, _, _, _, _ = np_docking.prepare_inputs()
         self.assertTrue(quiet)
 
     def test_ignore_existing_flag_set_when_passed(self):
         with patch("sys.argv", _argv("-r", self.rec_txt, "-l", self.lig_txt, "-i")):
-            _, _, _, _, _, _, ignore, _, _ = np_docking.prepare_inputs()
+            _, _, _, _, _, _, ignore, _, _, _ = np_docking.prepare_inputs()
         self.assertTrue(ignore)
 
 
@@ -142,6 +142,7 @@ class TestNaisarg(unittest.TestCase):
             ignore_existing,
             None,  # output_dir
             True,  # no_report
+            None,  # seed (not given on the CLI -> config/default wins)
         )
 
     def _all_patches(self):
@@ -369,6 +370,7 @@ class TestNaisarg(unittest.TestCase):
             False,  # ignore_existing
             None,  # output_dir
             True,  # no_report
+            None,  # seed (not given on the CLI -> config/default wins)
         )
         with (
             patch(
@@ -430,6 +432,7 @@ class TestNaisarg(unittest.TestCase):
             False,  # ignore_existing
             None,  # output_dir
             True,  # no_report
+            None,  # seed (not given on the CLI -> config/default wins)
         )
         with (
             patch(

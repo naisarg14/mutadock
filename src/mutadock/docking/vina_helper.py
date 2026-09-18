@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any, Optional
 
 try:
@@ -83,6 +84,24 @@ def _timeout_from_env(var: str, default: float) -> Optional[float]:
 RECEPTOR_PREP_TIMEOUT = _timeout_from_env("MUTADOCK_RECEPTOR_PREP_TIMEOUT", 900.0)
 AUTOSITE_TIMEOUT = _timeout_from_env("MUTADOCK_AUTOSITE_TIMEOUT", 1800.0)
 VINA_TIMEOUT = _timeout_from_env("MUTADOCK_VINA_TIMEOUT", 3600.0)
+
+# Default Vina RNG seed for every docking mutadock performs.
+#
+# Vina's own default is 0, which means "choose a random seed", so before this
+# constant existed two identical mutadock runs could return different
+# affinities with nothing in the output to explain it. That is not acceptable
+# for a tool whose results get published: the seed materially changes the
+# answer, not just its last decimal. Measured on BCR-ABL/imatinib at
+# exhaustiveness 32, changing only the seed moves a single Delta-binding by up
+# to 2.0 kcal/mol, because the seed can change WHICH binding mode is found
+# rather than merely how precisely one mode is scored.
+#
+# So a fixed seed is the default, it is recorded on every output row, and it is
+# overridable (``--seed`` on md_dock / md_vina_dock / md_quick, or ``seed =``
+# in a Vina config file) for anyone who wants replicates. A fixed default makes
+# a run reproducible; it does NOT make one run sufficient -- report replicates
+# across several seeds before quoting a Delta-binding as a result.
+DEFAULT_VINA_SEED = 19
 
 
 def backup(file_path: str) -> bool:
@@ -443,7 +462,15 @@ def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> str:
         if in_file.endswith(".mol2"):
             mol = Chem.MolFromMol2File(in_file)
 
-        mol = Chem.AddHs(mol)
+        # addCoords=True is REQUIRED. Without it RDKit adds the hydrogens as
+        # topology only, with no 3D coordinates, and meeko then writes every one
+        # of them at the origin (0, 0, 0). For a ligand docked in a box centred
+        # anywhere else that puts the polar/donor hydrogens tens of Angstroms
+        # outside the search volume, and Vina infers donor typing from whether a
+        # polar H sits within bonding distance of its N/O -- so those atoms stop
+        # being treated as H-bond donors and the score changes. Measured on
+        # imatinib/2HYY: WT -12.22 -> -12.55 kcal/mol, 5x the seed-noise floor.
+        mol = Chem.AddHs(mol, addCoords=True)
         mp = MoleculePreparation()
         molecule_setups = mp.prepare(mol)
         pdbqt_string, success, error_msg = PDBQTWriterLegacy.write_string(
@@ -540,11 +567,29 @@ def prepare_receptor(
             Path(tmp_pdb).unlink()
 
 
-def add_score_to_csv(pose_file: str, csv_file: str, score: float) -> str:
+def add_score_to_csv(
+    pose_file: str,
+    csv_file: str,
+    score: float,
+    center: Optional[Sequence[float]] = None,
+    box_size: Optional[Sequence[float]] = None,
+    exhaustiveness: Optional[int] = None,
+    seed: Optional[int] = None,
+) -> str:
     """Append a docking result row to the aggregate CSV file.
 
     Reads the last row to determine the next serial number, then appends a
-    row with columns ``sr``, ``name``, and ``affinity``.
+    row with columns ``sr``, ``name``, ``affinity`` and — when supplied — the
+    search parameters the score was computed with.
+
+    Recording these per row is not cosmetic. A Vina affinity is only
+    interpretable relative to the box it was computed in, so two rows scored in
+    different boxes are not comparable and no ``Δaffinity`` between them is
+    meaningful. The same argument applies to the RNG seed: at fixed settings a
+    seed change can move a single affinity by ~2 kcal/mol by finding a different
+    binding mode, so a row without its seed cannot be reproduced or replicated.
+    Without these columns a results CSV cannot be audited after the fact, and
+    silently inconsistent datasets are indistinguishable from valid ones.
 
     Args:
         pose_file: Path to the docking pose file (used to derive the run
@@ -552,6 +597,10 @@ def add_score_to_csv(pose_file: str, csv_file: str, score: float) -> str:
             ``rec_lig_out.sdf``/``.pdbqt``/``.pdb`` all yield ``rec_lig``.
         csv_file: Path to the CSV file to append to (created if absent).
         score: Binding affinity in kcal/mol.
+        center: Optional ``(x, y, z)`` search-box center actually used.
+        box_size: Optional ``(x, y, z)`` search-box dimensions actually used.
+        exhaustiveness: Optional Vina exhaustiveness actually used.
+        seed: Optional Vina RNG seed actually used.
 
     Returns:
         The run name derived from *pose_file*.
@@ -584,12 +633,62 @@ def add_score_to_csv(pose_file: str, csv_file: str, score: float) -> str:
     # Strip the trailing "_out" and any extension so the run name is the same
     # regardless of which pose artifact (SDF / PDBQT) is passed in.
     name = Path(pose_file).stem.removesuffix("_out")
+
+    def _fmt(v: object) -> object:
+        return round(float(v), 3) if isinstance(v, (int, float)) else ""
+
+    # Column order is append-only: new run parameters go on the END so that a
+    # CSV written by an older version stays readable by column name.
+    param_cols = ["center_x", "center_y", "center_z",
+                  "size_x", "size_y", "size_z", "exhaustiveness", "seed"]
+    c = list(center) if center is not None else [None, None, None]
+    b = list(box_size) if box_size is not None else [None, None, None]
+    param_vals = [
+        _fmt(c[0]) if len(c) > 0 and c[0] is not None else "",
+        _fmt(c[1]) if len(c) > 1 and c[1] is not None else "",
+        _fmt(c[2]) if len(c) > 2 and c[2] is not None else "",
+        _fmt(b[0]) if len(b) > 0 and b[0] is not None else "",
+        _fmt(b[1]) if len(b) > 1 and b[1] is not None else "",
+        _fmt(b[2]) if len(b) > 2 and b[2] is not None else "",
+        exhaustiveness if exhaustiveness is not None else "",
+        seed if seed is not None else "",
+    ]
+    full_row = [count, name, score, *param_vals]
+
+    # Match the existing file's column count instead of producing a ragged file.
+    # This covers the legacy 3-column CSVs and, now, files written before the
+    # seed column existed: the row is truncated to the width already on disk.
+    # Truncation loses a parameter rather than corrupting the file, so it is
+    # logged -- silently dropping the seed is exactly the kind of missing
+    # provenance this column was added to prevent.
+    existing_cols: Optional[int] = None
+    if file_exists:
+        try:
+            with open(csv_file) as hc:
+                for ln in hc:
+                    if ln.strip():
+                        existing_cols = len(ln.split(","))
+                        break
+        except Exception:
+            existing_cols = None
+
+    row = full_row
+    if existing_cols is not None and existing_cols < len(full_row):
+        dropped = param_cols[existing_cols - 3:]
+        row = full_row[:existing_cols]
+        logger.warning(
+            "%s has %d columns; appending a %d-column row would make it ragged, "
+            "so %s %s not recorded for this run. Start a new CSV to capture them.",
+            Path(csv_file).name, existing_cols, len(full_row),
+            ", ".join(dropped), "is" if len(dropped) == 1 else "are",
+        )
+
     try:
         with open(csv_file, "a", newline="") as out:
             writer = csv.writer(out)
             if not file_exists:
-                writer.writerow(["sr", "name", "affinity"])
-            writer.writerow([count, name, score])
+                writer.writerow(["sr", "name", "affinity", *param_cols])
+            writer.writerow(row)
     except Exception as e:
         raise DockingError(f"Failed to write to CSV '{csv_file}': {e}") from e
 
@@ -598,7 +697,7 @@ def add_score_to_csv(pose_file: str, csv_file: str, score: float) -> str:
 
 def read_config(
     config_file: str,
-) -> tuple[list[float], list[float], int, int, int, bool]:
+) -> tuple[list[float], list[float], int, int, int, bool, int]:
     """Parse a Vina configuration file and return docking parameters.
 
     Expects ``key = value`` lines; lines starting with ``#`` are ignored.
@@ -608,7 +707,10 @@ def read_config(
         config_file: Path to the Vina ``.conf`` / ``.txt`` config file.
 
     Returns:
-        ``(center, box_size, exhaustiveness, n_poses, n_poses_write, overwrite)``
+        ``(center, box_size, exhaustiveness, n_poses, n_poses_write, overwrite,
+        seed)``.  *seed* falls back to :data:`DEFAULT_VINA_SEED` when the config
+        does not name one, so a config written before seeds were recorded still
+        yields a reproducible run rather than a random one.
 
     Raises:
         ConfigError: If the file cannot be read or parsed.
@@ -636,8 +738,17 @@ def read_config(
         n_poses = int(config.get("n_poses", "20"))
         n_poses_write = int(config.get("n_poses_write", "5"))
         overwrite = config.get("overwrite", "True").lower() in ("true", "1", "yes")
+        seed = int(config.get("seed", str(DEFAULT_VINA_SEED)))
 
-        return (center, box_size, exhaustiveness, n_poses, n_poses_write, overwrite)
+        return (
+            center,
+            box_size,
+            exhaustiveness,
+            n_poses,
+            n_poses_write,
+            overwrite,
+            seed,
+        )
 
     except Exception as e:
         raise ConfigError(f"Failed to read config file '{config_file}': {e}") from e
@@ -648,8 +759,21 @@ def run_autosite(receptor_pdbqt: str) -> str:
 
     Creates an output directory named ``{stem}_autosite_out`` next to the
     receptor file and runs ``autosite -r receptor.pdbqt -o out_dir``.
-    AutoSite errors if the output directory already exists — callers are
-    responsible for removing it before calling this function.
+
+    The directory is created here because AutoSite requires it to ALREADY EXIST
+    and asserts otherwise (``MakeGrids.setWorkingFolder``: "The directory
+    specified doesn't exist or is not accessible"). It is created with
+    ``exist_ok=False``, so a pre-existing directory raises ``FileExistsError``
+    rather than being silently reused with stale maps in it — callers must remove
+    it first (see ``_prepare_autosite`` in benchmark2/benchmark_platinum.py and
+    the AutoSite branch of np_docking).
+
+    NOTE ON FAILURE MODES: AutoSite can exit 0 having found NOTHING. On a
+    receptor with no detectable pocket it prints "analysing 0 clusters" and
+    writes no ``*_cl_001.pdb``, which this function reports as a
+    ``DockingRunError`` about the missing cluster file rather than a crash. That
+    is a legitimate result for some structures, not necessarily a bug — verified
+    on PLATINUM systems 2CC7, 2CCB, 2CCC and 1MAR, which yield 0 clusters.
 
     Args:
         receptor_pdbqt: Path to the prepared receptor PDBQT file.
@@ -658,8 +782,10 @@ def run_autosite(receptor_pdbqt: str) -> str:
         Path to the AutoSite cluster PDB file (``{stem}_cl_001.pdb``).
 
     Raises:
+        FileExistsError: If ``{stem}_autosite_out`` already exists.
         DockingRunError: If the autosite binary is not found, the subprocess
-            fails, or the expected cluster PDB is absent after the run.
+            fails or times out, or the expected cluster PDB is absent after the
+            run (including the "0 clusters found" case above).
     """
     import shutil
     import subprocess
@@ -709,6 +835,7 @@ def dock_vina(
     n_poses: int = 20,
     n_poses_write: int = 5,
     overwrite: bool = True,
+    seed: int = DEFAULT_VINA_SEED,
 ) -> None:
     """Run AutoDock Vina by spawning ``vina_dock.py`` as a subprocess.
 
@@ -730,6 +857,8 @@ def dock_vina(
         n_poses: Number of poses to generate (default 20).
         n_poses_write: Number of poses to write to *output* (default 5).
         overwrite: Whether to overwrite an existing output file.
+        seed: Vina RNG seed (default :data:`DEFAULT_VINA_SEED`).  A *config*
+            file naming ``seed`` overrides this, like every other parameter.
 
     Raises:
         ConfigError: If the config file cannot be read.
@@ -737,9 +866,15 @@ def dock_vina(
         DockingRunError: If the Vina subprocess exits with a non-zero code.
     """
     if config is not None:
-        center, box_size, exhaustiveness, n_poses, n_poses_write, overwrite = (
-            read_config(config)
-        )
+        (
+            center,
+            box_size,
+            exhaustiveness,
+            n_poses,
+            n_poses_write,
+            overwrite,
+            seed,
+        ) = read_config(config)
 
     if autosite is not None:
         center = list(calculate_geometric_center(autosite))
@@ -776,6 +911,8 @@ def dock_vina(
         str(n_poses),
         "--n_poses_write",
         str(n_poses_write),
+        "--seed",
+        str(seed),
     ]
     commands.append("--overwrite" if overwrite else "--no-overwrite")
     with open(log_file, "w+") as lfile:

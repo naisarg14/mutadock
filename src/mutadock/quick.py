@@ -46,6 +46,7 @@ from mutadock.docking.exceptions import (
     ReceptorPreparationError,
 )
 from mutadock.docking.vina_helper import (
+    DEFAULT_VINA_SEED,
     add_score_to_csv,
     calculate_geometric_center,
     calculate_radius,
@@ -201,6 +202,7 @@ def _dock(
     config: Optional[str],
     exhaustiveness: int,
     quiet: bool,
+    seed: int = DEFAULT_VINA_SEED,
 ) -> tuple[float, str]:
     """Dock *ligand_file* into *mutant_pdb*; return (affinity, pose_sdf_path).
 
@@ -215,9 +217,15 @@ def _dock(
 
     n_poses, n_poses_write, overwrite = 20, 5, True
     if config is not None:
-        center, box_size, exhaustiveness, n_poses, n_poses_write, overwrite = (
-            read_config(config)
-        )
+        (
+            center,
+            box_size,
+            exhaustiveness,
+            n_poses,
+            n_poses_write,
+            overwrite,
+            seed,
+        ) = read_config(config)
     else:
         if not quiet:
             logger.info("Running AutoSite to locate the binding pocket ...")
@@ -243,7 +251,9 @@ def _dock(
     log_file = str(out_dir / f"{mutant_path.stem}_{lig_path.stem}_log.txt")
 
     if not quiet:
-        logger.info("Docking (exhaustiveness=%d) ...", exhaustiveness)
+        logger.info(
+            "Docking (exhaustiveness=%d, seed=%d) ...", exhaustiveness, seed
+        )
     with suppress_stdout():
         dock_vina(
             prepared_receptor,
@@ -256,10 +266,19 @@ def _dock(
             n_poses=n_poses,
             n_poses_write=n_poses_write,
             overwrite=overwrite,
+            seed=seed,
         )
         score, _ = vina_split(input_file=out_pdbqt, output_file=out_sdf)
 
-    add_score_to_csv(out_sdf, str(out_dir / "docking_results.csv"), score)
+    add_score_to_csv(
+        out_sdf,
+        str(out_dir / "docking_results.csv"),
+        score,
+        center=center,
+        box_size=box_size,
+        exhaustiveness=exhaustiveness,
+        seed=seed,
+    )
     return score, out_sdf
 
 
@@ -273,6 +292,7 @@ def run_quick(
     out_dir: Path,
     config: Optional[str] = None,
     exhaustiveness: int = DEFAULT_EXHAUSTIVENESS,
+    seed: int = DEFAULT_VINA_SEED,
     make_report: bool = True,
     quiet: bool = False,
     replicates: int = 1,
@@ -344,7 +364,7 @@ def run_quick(
     pose_sdf: Optional[str] = None
     try:
         affinity, pose_sdf = _dock(
-            mutant_pdb, lig, out_dir, config, exhaustiveness, quiet
+            mutant_pdb, lig, out_dir, config, exhaustiveness, quiet, seed
         )
         if not quiet:
             logger.info("Docking affinity = %.3f kcal/mol", affinity)
@@ -442,6 +462,13 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help=f"Vina exhaustiveness (default: {DEFAULT_EXHAUSTIVENESS}).",
     )
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=DEFAULT_VINA_SEED,
+        help=f"Vina RNG seed (default: {DEFAULT_VINA_SEED}). Change it for an "
+        f"independent replicate; 0 means 'random seed', not reproducible.",
+    )
+    parser.add_argument(
         "--no-report", dest="no_report", action="store_true", help="Skip report."
     )
     parser.add_argument(
@@ -471,6 +498,7 @@ def md_quick(argv: Optional[list[str]] = None) -> None:
         out_dir=out_dir,
         config=args.config,
         exhaustiveness=args.exhaustiveness,
+        seed=args.seed,
         make_report=not args.no_report,
         quiet=args.quiet,
         **resolve_ddg_params(args),
