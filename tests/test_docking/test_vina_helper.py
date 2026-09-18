@@ -633,8 +633,16 @@ class TestAddScoreToCsv(unittest.TestCase):
         vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
         self.assertTrue(Path(self.csv_file).is_file())
 
-    BOX_COLS = ["center_x", "center_y", "center_z",
-                "size_x", "size_y", "size_z", "exhaustiveness", "seed"]
+    BOX_COLS = [
+        "center_x",
+        "center_y",
+        "center_z",
+        "size_x",
+        "size_y",
+        "size_z",
+        "exhaustiveness",
+        "seed",
+    ]
 
     def test_header_written_on_creation(self):
         vina_helper.add_score_to_csv(self.out_pdb, self.csv_file, -7.5)
@@ -668,8 +676,12 @@ class TestAddScoreToCsv(unittest.TestCase):
 
     def test_box_parameters_recorded_when_supplied(self):
         vina_helper.add_score_to_csv(
-            self.out_pdb, self.csv_file, -7.5,
-            center=[1.2345, 2.0, 3.0], box_size=[20.0, 21.0, 22.0], exhaustiveness=8,
+            self.out_pdb,
+            self.csv_file,
+            -7.5,
+            center=[1.2345, 2.0, 3.0],
+            box_size=[20.0, 21.0, 22.0],
+            exhaustiveness=8,
             seed=19,
         )
         with open(self.csv_file) as f:
@@ -706,9 +718,13 @@ class TestAddScoreToCsv(unittest.TestCase):
             f.write(f"{pre_seed_header}\n1,old,-9.0,1.0,2.0,3.0,20.0,20.0,20.0,8\n")
         with self.assertLogs(vina_helper.logger, level="WARNING"):
             vina_helper.add_score_to_csv(
-                self.out_pdb, self.csv_file, -7.5,
-                center=[1.0, 2.0, 3.0], box_size=[20.0, 20.0, 20.0],
-                exhaustiveness=8, seed=19,
+                self.out_pdb,
+                self.csv_file,
+                -7.5,
+                center=[1.0, 2.0, 3.0],
+                box_size=[20.0, 20.0, 20.0],
+                exhaustiveness=8,
+                seed=19,
             )
         with open(self.csv_file) as f:
             rows = list(csv.reader(f))
@@ -719,8 +735,12 @@ class TestAddScoreToCsv(unittest.TestCase):
         with open(self.csv_file, "w") as f:
             f.write("sr,name,affinity\n1,old_run,-9.0\n")
         vina_helper.add_score_to_csv(
-            self.out_pdb, self.csv_file, -7.5,
-            center=[1.0, 2.0, 3.0], box_size=[20.0, 20.0, 20.0], exhaustiveness=8,
+            self.out_pdb,
+            self.csv_file,
+            -7.5,
+            center=[1.0, 2.0, 3.0],
+            box_size=[20.0, 20.0, 20.0],
+            exhaustiveness=8,
         )
         with open(self.csv_file) as f:
             rows = list(csv.reader(f))
@@ -890,8 +910,12 @@ class TestDockVina(unittest.TestCase):
         cfg.write_text("center_x = 1\ncenter_y = 2\ncenter_z = 3\nseed = 555\n")
         with patch("subprocess.run", return_value=self._mock_subprocess()) as mock_run:
             vina_helper.dock_vina(
-                self.receptor, self.ligand, self.output, self.log,
-                config=str(cfg), seed=111,
+                self.receptor,
+                self.ligand,
+                self.output,
+                self.log,
+                config=str(cfg),
+                seed=111,
             )
         cmd = mock_run.call_args[0][0]
         self.assertEqual(cmd[cmd.index("--seed") + 1], "555")

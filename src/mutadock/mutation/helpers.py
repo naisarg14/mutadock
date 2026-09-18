@@ -34,7 +34,12 @@ from typing import Optional
 from .Amino import check_3, get_1, get_3
 from .exceptions import MutationError, ResidueMismatchError
 
-DATA_DIR = Path(__file__).parent.parent.parent / "data"
+DATA_DIR = Path(__file__).parent.parent / "data"
+DOWNLOAD_DATA_DIR = Path(
+    os.environ.get(
+        "MUTADOCK_DATA_DIR", Path.home() / ".cache" / "mutadock" / "matrices"
+    )
+)
 NCBI_MATRIX_URL = "https://ftp.ncbi.nih.gov/blast/matrices/"
 RCSB_PDB_URL = "https://files.rcsb.org/download/{pdb_id}.pdb"
 
@@ -555,9 +560,7 @@ def structure_warnings(pdb_file: str) -> list[str]:
             "alongside the one(s) you care about, which can make runs take "
             "much longer — consider keeping only the chain(s) of interest."
         )
-        for group in _similar_chain_groups(
-            {c: sequences[c] for c in polymer_chains}
-        ):
+        for group in _similar_chain_groups({c: sequences[c] for c in polymer_chains}):
             warnings.append(
                 f"Chains {', '.join(group)} are similar in the input (e.g. a "
                 "dimer/tetramer); recommend checking and keeping only one-two "
@@ -644,9 +647,9 @@ def load_matrix(
 
 
 def download_matrix(name: str) -> Path:
-    """Download *name* from the NCBI BLAST matrices FTP into ``data/``."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    dest = DATA_DIR / name
+    """Download *name* from NCBI BLAST into the user-writable matrix cache."""
+    DOWNLOAD_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    dest = DOWNLOAD_DATA_DIR / name
     url = NCBI_MATRIX_URL + name
     logger.info("Downloading matrix '%s' from %s ...", name, url)
     try:
@@ -660,11 +663,12 @@ def download_matrix(name: str) -> Path:
 def resolve_matrix(
     name: str = "PAM250", custom_file: Optional[str] = None
 ) -> dict[str, dict[str, int]]:
-    """Return a scoring matrix, downloading from NCBI if not already in ``data/``.
+    """Return a scoring matrix, downloading it if it is not bundled or cached.
 
     If *custom_file* is given it is loaded directly, ignoring *name*.
-    Otherwise the matrix is looked up in ``data/``; if absent it is downloaded
-    from ``https://ftp.ncbi.nih.gov/blast/matrices/``.
+    Otherwise the bundled package data is checked first, then the user-writable
+    cache. Missing matrices are downloaded from
+    ``https://ftp.ncbi.nih.gov/blast/matrices/`` into that cache.
     """
     if custom_file:
         path = Path(custom_file)
@@ -675,7 +679,8 @@ def resolve_matrix(
     name = name.upper()
     path = DATA_DIR / name
     if not path.is_file():
-        path = download_matrix(name)
+        cached = DOWNLOAD_DATA_DIR / name
+        path = cached if cached.is_file() else download_matrix(name)
     return load_matrix(path)
 
 

@@ -7,11 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-09-18
+
 ### Added
 - **Per-item checkpoint/resume for ΔΔG.** `calc_ddg` / `calc_double_ddg` / `calc_triple_ddg` (and `md_ddg_single` / `md_ddg_double` / `md_ddg_triple` via a new `--resume` flag) can now continue an interrupted run: the output CSV is its own checkpoint, so an interruption partway through keeps the rows already computed and only the missing mutations/combinations are recomputed — instead of discarding everything and starting over. Each completed row is flushed immediately, a torn trailing line from a mid-write kill is dropped and recomputed cleanly, and resume refuses to mix rows written under a different `ddG_protocol` or `n_replicates` (it starts fresh in that case). `md_mutate` uses this automatically (driven by the existing append default), upgrading its previous coarse "skip only if the whole file is complete" check to true per-item resume — the same granularity the docking side already had via `*_completed.txt`.
 - **Subprocess timeouts for external tools.** `mk_prepare_receptor`, AutoSite, and Vina are now each run with a wall-clock timeout so a single hung job can no longer stall an entire batch — a timeout raises the tool's domain error and the batch loop skips that receptor-ligand combination. Defaults are 15 min (receptor prep), 30 min (AutoSite), and 60 min (Vina), each overridable via `MUTADOCK_RECEPTOR_PREP_TIMEOUT` / `MUTADOCK_AUTOSITE_TIMEOUT` / `MUTADOCK_VINA_TIMEOUT` (seconds; set to `0` to disable that timeout).
 - `read_partial_ddg()` helper in `mutation/helpers.py` — reads the complete rows of a partial ΔΔG CSV for resume, dropping any torn trailing line and enforcing a settings match.
 - Regression tests: ΔΔG resume identity for single/double/triple (resumed run reproduces the exact row set, `sr` numbering, and `combination` names of a from-scratch run), `read_partial_ddg` guards, and TimeoutExpired→domain-error routing for all three subprocesses (including a real sleeping-subprocess timeout).
+
+### Changed
+- Docking result rows now record the Vina seed, box centre, box size, and exhaustiveness so every reported affinity retains its run provenance.
+- Vina seed handling is explicit across the CLI and batch workflow; a command-line seed takes precedence over configuration only with a visible warning.
+- Ambiguous simultaneous AutoSite and explicit-config requests are rejected instead of silently selecting one search box.
+- Structure checks now warn about duplicated or highly similar chains that can unintentionally multiply mutation enumeration and docking work.
+
+### Fixed
+- Ligand preparation now adds hydrogens with 3-D coordinates before Meeko conversion, preventing polar hydrogens from being written at the origin and preserving hydrogen-bond donor typing.
+- Per-receptor AutoSite boxes are carried through to the corresponding result row instead of being reported as if one global box had been used.
+- Docking CSV append logic remains compatible with older result files while avoiding ragged rows when new provenance columns are present.
+- AutoSite and Vina subprocess failures now preserve clearer context, and configuration/seed validation rejects invalid or contradictory inputs earlier.
+- Substitution matrices now ship inside the installed package, and additional NCBI matrices are cached in a user-writable directory (`~/.cache/mutadock/matrices`, overridable with `MUTADOCK_DATA_DIR`) instead of attempting to write into `site-packages`.
 
 ## [2.1.0] - 2026-07-03
 

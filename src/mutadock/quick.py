@@ -251,9 +251,7 @@ def _dock(
     log_file = str(out_dir / f"{mutant_path.stem}_{lig_path.stem}_log.txt")
 
     if not quiet:
-        logger.info(
-            "Docking (exhaustiveness=%d, seed=%d) ...", exhaustiveness, seed
-        )
+        logger.info("Docking (exhaustiveness=%d, seed=%d) ...", exhaustiveness, seed)
     with suppress_stdout():
         dock_vina(
             prepared_receptor,

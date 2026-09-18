@@ -105,7 +105,9 @@ def vina_dock(
             )
         logger.info(
             "Vina settings: seed=%d, exhaustiveness=%d, n_poses=%d",
-            seed, exhaustiveness, n_poses,
+            seed,
+            exhaustiveness,
+            n_poses,
         )
         v = Vina(sf_name="vina", seed=seed)
 

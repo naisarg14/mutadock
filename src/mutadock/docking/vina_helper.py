@@ -23,8 +23,8 @@ import os
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Optional
 
 try:
@@ -635,14 +635,22 @@ def add_score_to_csv(
     name = Path(pose_file).stem.removesuffix("_out")
 
     def _fmt(v: object) -> object:
-        return round(float(v), 3) if isinstance(v, (int, float)) else ""
+        return round(float(v), 3) if isinstance(v, int | float) else ""
 
     # Column order is append-only: new run parameters go on the END so that a
     # CSV written by an older version stays readable by column name.
-    param_cols = ["center_x", "center_y", "center_z",
-                  "size_x", "size_y", "size_z", "exhaustiveness", "seed"]
-    c = list(center) if center is not None else [None, None, None]
-    b = list(box_size) if box_size is not None else [None, None, None]
+    param_cols = [
+        "center_x",
+        "center_y",
+        "center_z",
+        "size_x",
+        "size_y",
+        "size_z",
+        "exhaustiveness",
+        "seed",
+    ]
+    c: list[Optional[float]] = list(center) if center is not None else [None] * 3
+    b: list[Optional[float]] = list(box_size) if box_size is not None else [None] * 3
     param_vals = [
         _fmt(c[0]) if len(c) > 0 and c[0] is not None else "",
         _fmt(c[1]) if len(c) > 1 and c[1] is not None else "",
@@ -674,13 +682,16 @@ def add_score_to_csv(
 
     row = full_row
     if existing_cols is not None and existing_cols < len(full_row):
-        dropped = param_cols[existing_cols - 3:]
+        dropped = param_cols[existing_cols - 3 :]
         row = full_row[:existing_cols]
         logger.warning(
             "%s has %d columns; appending a %d-column row would make it ragged, "
             "so %s %s not recorded for this run. Start a new CSV to capture them.",
-            Path(csv_file).name, existing_cols, len(full_row),
-            ", ".join(dropped), "is" if len(dropped) == 1 else "are",
+            Path(csv_file).name,
+            existing_cols,
+            len(full_row),
+            ", ".join(dropped),
+            "is" if len(dropped) == 1 else "are",
         )
 
     try:
