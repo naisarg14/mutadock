@@ -1,5 +1,14 @@
 MutaDock documentation
 ======================
+
+Release 2.2.1
+-------------
+
+MUTADOCK 2.2 adds reproducible docking seeds and run provenance, resumable
+mutation and docking workflows, safer structure and ligand validation, and
+timeouts for external preparation and docking tools. Version 2.2.1 updates the
+packaged and online documentation for those changes.
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
@@ -50,22 +59,21 @@ How To Guide
 Installation
 ^^^^^^^^^^^^
 
-MutaDock has been deployed on PyPi, making installation quick and simple
+MutaDock is published on PyPI, making installation quick and simple:
 
 .. code-block::
 
    pip install mutadock
 
-The Pyrosetta Installer will be automatically installed but Pyrosetta should be installed using
+The PyRosetta installer is included as a dependency, but PyRosetta itself must
+be installed separately:
 
 .. code-block::
 
-   md_install_dependencies
+   python -c "import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()"
 
-this will install all dependencies including Pyrosetta.
-
-
-* Currently there is a problem with the vina on PyPi, so vina needs to be installed separately, the installation guide can be found at https://autodock-vina.readthedocs.io/en/latest/installation.html
+AutoDock Vina must also be installed separately; follow the `official Vina
+installation guide <https://autodock-vina.readthedocs.io/en/latest/installation.html>`_.
 
 Quick demo (md_quick)
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -83,6 +91,9 @@ name; ``--ligand-file`` takes a local file), locates the pocket with AutoSite (o
 pass ``-c config.txt``), docks, and writes the standard ``reports/`` bundle into
 ``mdquick_<id>/`` (or ``-o``). ``-i protein.pdb`` uses a local structure instead
 of ``--pdb-id``. Requires the ``autosite`` binary on PATH when no config is given.
+Docking uses the reproducible default seed ``19``; pass ``--seed`` to select a
+different seed. A value of ``0`` asks Vina to choose a random, non-reproducible
+seed.
 
 Mutation Studies
 ^^^^^^^^^^^^^^^^
@@ -100,6 +111,17 @@ By default all outputs are written next to the input structure. Pass
 
    md_mutate -i protein.pdb -o results/
 
+The pipeline appends to its checkpoint CSVs by default. Rerunning an interrupted
+job skips completed mutations and resumes the missing work. The direct
+``md_ddg_single``, ``md_ddg_double``, and ``md_ddg_triple`` commands expose the
+same behavior through ``--resume``. Use ``md_mutate --no-append`` when you
+intentionally want to regenerate all mutation results.
+
+MUTADOCK warns when an input contains multiple models or chains, duplicated or
+highly similar chain sequences, alternate conformations, or insertion codes.
+Inspect these warnings and isolate the intended chain or model before interpreting
+residue-numbered results.
+
 Other optional arguments can be changed as required, to check the usage run
 
 .. code-block::
@@ -110,8 +132,8 @@ Other optional arguments can be changed as required, to check the usage run
 reference)`` with the identical protocol on both sides (so a null WT→WT mutation
 scores ≈ 0). ``ddG_value`` is in **Rosetta Energy Units (REU), not kcal/mol**; a
 ``ddG_kcal`` column is also written. The REU→kcal/mol factor is
-``REU_TO_KCAL_SCALE`` in ``src/mutadock/mutation/predict_ddG.py`` (default 0.34 ≈
-1/2.94, Park et al. 2016), overridable with ``--reu-to-kcal``. The default
+0.34 by default (≈ 1/2.94, Park et al. 2016) and is overridable per run with
+``--reu-to-kcal``; editing installed package code is not required. The default
 ``--protocol min`` (repack + minimization) is reliable; ``--protocol cartesian``
 is most accurate; ``--protocol fast`` skips minimization and is **screening
 only** (absolute values unreliable — its reports carry a warning banner). Use
@@ -186,8 +208,10 @@ it to the ΔΔG stages:
 **Available matrices.** ``PAM250`` (default) and ``BLOSUM62`` ship with MUTADOCK.
 Any other matrix name from the `NCBI BLAST FTP
 <https://ftp.ncbi.nih.gov/blast/matrices/>`_ (e.g. ``PAM30``, ``PAM70``,
-``BLOSUM45``, ``BLOSUM80``) is downloaded automatically into ``data/`` on first
-use. A fully custom matrix in NCBI format can be supplied with
+``BLOSUM45``, ``BLOSUM80``) is downloaded automatically into the user-writable
+``~/.cache/mutadock/matrices`` directory on first use. Set
+``MUTADOCK_DATA_DIR`` to choose another cache directory. A fully custom matrix
+in NCBI format can be supplied with
 ``--matrix-file /path/to/matrix`` (this overrides ``--matrix``).
 
 **When to use which.** PAM matrices model accepted point mutations over
@@ -221,11 +245,19 @@ Example:
 .. code-block::
 
    md_dock -r receptors.txt -l ligands.txt -c config.txt
+   md_dock -r receptors.txt -l ligands.txt -c config.txt --seed 19
 
 By default docking outputs go to an ``out/`` folder next to each receptor. Pass
 ``-o/--output-dir DIR`` to collect poses, logs, ``docking_results.csv``, and the
 resume file in a single ``DIR`` instead. Prepared PDBQT files and AutoSite caches
 still live next to their inputs so they can be reused across runs.
+
+Completed receptor-ligand pairs are skipped automatically using the
+``*_completed.txt`` checkpoint. Pass ``--ignore-existing`` to dock them again.
+The default Vina seed is ``19``. It can also be set with ``seed = ...`` in a
+configuration file; an explicit command-line ``--seed`` takes precedence with a
+visible warning. ``docking_results.csv`` records the box center, box size,
+exhaustiveness, and seed for every result so a run can be reproduced.
 
 .. code-block::
 
@@ -249,20 +281,20 @@ The output of md_dock with their description is in the table below:
      - PDBQT files
      - The receptors and ligands will be converted to PDBQT files for AutoDock Vina.
    * - 2.
-     - Output Log
+     - ``*_log.txt``
      - The output of AutoDock Vina with the docking scores will be stored in a log file for each combination.
    * - 3.
-     - Output PDB
-     - The output of AutoDock Vina with the 5 best docking poses will be stored in a PDB file for each combination.
+     - ``*_out.pdbqt``
+     - Raw multi-pose output written by AutoDock Vina for each combination.
    * - 4.
-     - Output PDBQT
-     - The output of AutoDock Vina Split with the best pose will be stored in a PDBQT file for each combination.
+     - ``*_out.sdf``
+     - The extracted best pose in SDF format for visualization.
    * - 5.
-     - Output SDF
-     - The best pose after docking will be stored in a SDF file for visualization and better usability.
+     - ``docking_results.csv``
+     - Affinities and the search-box, exhaustiveness, and seed provenance for every successful combination.
    * - 6.
-     - Docking Results CSV
-     - All the docking affinities are tabulated in a CSV to make analysis trivial.
+     - ``*_completed.txt``
+     - Resume checkpoint containing completed receptor-ligand combinations.
 
 
 Choosing the docking box
@@ -277,7 +309,7 @@ how they interact avoids the most common surprises.
   ``center_y``, ``center_z`` (box center), ``size_x``, ``size_y``, ``size_z``
   (box dimensions in Å — these are independent, so the box may be
   **non-cubic**), plus ``exhaustiveness`` (default 32), ``n_poses`` (20),
-  ``n_poses_write`` (5) and ``overwrite``. Lines beginning with ``#`` are
+  ``n_poses_write`` (5), ``overwrite``, and ``seed`` (19). Lines beginning with ``#`` are
   ignored. Use this when you already know the pocket, want a reproducible box, or
   need to tune the search. **Watch out:** any omitted ``center_*`` key silently
   defaults to ``0.0`` — a config without an explicit center places an empty box
@@ -292,6 +324,7 @@ how they interact avoids the most common surprises.
      size_y = 24
      size_z = 24
      exhaustiveness = 32
+     seed = 19
 
 * **``-a autosite.pdb`` — a fixed AutoSite cluster.** Pass a cluster PDB that
   AutoSite already produced. MUTADOCK sets the center to the cluster's geometric
@@ -307,12 +340,23 @@ how they interact avoids the most common surprises.
   error asking for one of the options above. Prefer this when docking mutants
   whose pockets may shift, since each receptor gets its own box.
 
-**How ``-c`` and ``-a`` interact.** If you pass both, AutoSite wins for the
-*geometry* — the cluster's center and cube override whatever ``center_*`` /
-``size_*`` were in the config — but the config's **search parameters**
-(``exhaustiveness``, ``n_poses``, ``n_poses_write``, ``overwrite``) still apply.
-This lets you take the box from AutoSite while keeping a tuned search from your
-config.
+**Do not combine ``-c`` and ``-a``.** They are mutually exclusive sources of
+docking-box geometry, and MUTADOCK rejects a command that supplies both instead
+of silently choosing one.
+
+External-tool timeouts
+^^^^^^^^^^^^^^^^^^^^^^
+
+MUTADOCK prevents a hung external process from blocking an entire batch. The
+default limits are 900 seconds for receptor preparation, 1800 seconds for
+AutoSite, and 3600 seconds for Vina. Override them with
+``MUTADOCK_RECEPTOR_PREP_TIMEOUT``, ``MUTADOCK_AUTOSITE_TIMEOUT``, and
+``MUTADOCK_VINA_TIMEOUT``, respectively. Set a value to ``0`` to disable that
+timeout.
+
+Ligand preparation adds hydrogens with 3-D coordinates before Meeko conversion.
+Inputs without usable 3-D coordinates are rejected with an actionable error
+instead of producing a misleading docking result.
 
 Reports
 ^^^^^^^
@@ -345,29 +389,38 @@ All CLI Scripts
      - **Command**
      - **Description**
    * - 1.
+     - md_quick
+     - Runs mutation, mutant generation, ligand acquisition, docking, and reporting as a one-command workflow
+   * - 2.
      - md_mutate
      - Predicts the best mutation of the given protein
-   * - 2.
+   * - 3.
      - md_dock
      - Docked all combinations from a list of receptors and ligands
-   * - 3.
+   * - 4.
      - md_vina_dock
      - CLI for AutoDock Vina
-   * - 4.
+   * - 5.
      - md_csv_generator
      - Generates all possible mutations for a protein and also the mutations possible according to PAM Matrix
-   * - 5.
+   * - 6.
      - md_csv_sort
      - Can sort any CSV file according to the column name or number chosen
-   * - 6.
+   * - 7.
      - md_ddg_single
      - Calculates single ddG values for a given CSV of mutations
-   * - 7.
+   * - 8.
      - md_ddg_double
      - Calculates double ddG values for all combinations using a given CSV of mutations
-   * - 8.
+   * - 9.
      - md_ddg_triple
      - Calculates triple ddG values for all combinations using a given CSV of mutations
+   * - 10.
+     - md_generate_pdb
+     - Generates independent or compound mutant PDB files without running ΔΔG scoring
+   * - 11.
+     - md_report
+     - Builds HTML and PowerPoint reports from an existing run directory
 
 
 Applications

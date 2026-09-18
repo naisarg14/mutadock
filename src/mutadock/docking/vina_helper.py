@@ -145,7 +145,7 @@ def read_pdb_file(file_path: str) -> list[dict[str, Any]]:
         List of atom dicts.
 
     Raises:
-        PDBFileError: If the file cannot be read or parsed.
+        mutadock.docking.exceptions.PDBFileError: If the file cannot be read or parsed.
     """
     import re
 
@@ -189,7 +189,7 @@ def calculate_geometric_center(pdb_file: str) -> tuple[float, float, float]:
         A 3-tuple ``(cx, cy, cz)`` of mean coordinates.
 
     Raises:
-        PDBFileError: If the PDB file cannot be parsed.
+        mutadock.docking.exceptions.PDBFileError: If the PDB file cannot be parsed.
     """
     atoms = read_pdb_file(pdb_file)
     num_atoms = len(atoms)
@@ -214,7 +214,7 @@ def calculate_radius(pdb_file: str) -> float:
         Max distance in Ångströms.
 
     Raises:
-        PDBFileError: If the PDB file cannot be parsed.
+        mutadock.docking.exceptions.PDBFileError: If the PDB file cannot be parsed.
     """
     import math
 
@@ -873,7 +873,7 @@ def dock_vina(
 
     Raises:
         ConfigError: If the config file cannot be read.
-        PDBFileError: If the autosite PDB cannot be parsed.
+        mutadock.docking.exceptions.PDBFileError: If the autosite PDB cannot be parsed.
         DockingRunError: If the Vina subprocess exits with a non-zero code.
     """
     if config is not None:

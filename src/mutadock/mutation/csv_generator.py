@@ -74,7 +74,7 @@ def generate_csv(
         ``(out_op, out_all)`` paths.
 
     Raises:
-        PDBFileError: If the PDB file cannot be read.
+        mutadock.mutation.exceptions.PDBFileError: If the PDB file cannot be read.
         CSVGenerationError: If the PDB file contains no residues.
         MutationError: If the matrix cannot be loaded or downloaded.
     """
@@ -160,7 +160,7 @@ def get_residues(file: str) -> dict[int, tuple[str, int, str]]:
         Mapping of sequential index to ``(chain_id, position, residue_name)``.
 
     Raises:
-        PDBFileError: If the file is not found.
+        mutadock.mutation.exceptions.PDBFileError: If the file is not found.
     """
     residues: dict[int, tuple[str, int, str]] = {}
     count = 1

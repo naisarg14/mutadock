@@ -14,6 +14,8 @@ sys.path.insert(0, os.path.abspath("../src"))
 project = "MutaDock"
 copyright = "2026, Naisarg Patel"
 author = "Naisarg Patel"
+version = "2.2"
+release = "2.2.1"
 
 # -- General configuration ---------------------------------------------------
 
@@ -50,8 +52,6 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 # -- Options for HTML output -------------------------------------------------
 
 html_theme = "alabaster"
-html_static_path = ["_static"]
-
 html_theme_options = {
     "description": "Mutation analysis and multi-receptor docking toolkit",
     "github_user": "naisarg14",
