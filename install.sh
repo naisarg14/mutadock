@@ -10,7 +10,7 @@ echo "==> Activating virtual environment..."
 # shellcheck disable=SC1091
 source "$VENV_DIR/bin/activate"
 
-echo "==> Installing mutadock and its dependencies..."
+echo "==> Installing MUTADOCK and its declared Python dependencies..."
 python -m pip install --upgrade pip
 python -m pip install .
 
@@ -20,3 +20,5 @@ python -c 'import pyrosetta_installer; pyrosetta_installer.install_pyrosetta()'
 echo ""
 echo "Installation complete."
 echo "Activate the environment with: source $VENV_DIR/bin/activate"
+echo "AutoDock Vina and AutoSite are external tools and are not installed by this script."
+echo "For the complete native stack, prefer the documented conda or Docker installation."

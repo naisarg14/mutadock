@@ -333,6 +333,9 @@ class TestPrepareLigand(unittest.TestCase):
 
     def _stubs(self, pdbqt_string="PDBQT_DATA"):
         mock_mol = MagicMock()
+        mock_mol.GetNumAtoms.return_value = 2
+        mock_mol.GetNumConformers.return_value = 1
+        mock_mol.GetConformer.return_value.Is3D.return_value = True
         mock_chem = MagicMock()
         mock_chem.SDMolSupplier.return_value.__getitem__ = MagicMock(
             return_value=mock_mol
@@ -389,6 +392,35 @@ class TestPrepareLigand(unittest.TestCase):
         rdkit_stub.Chem.AddHs.side_effect = RuntimeError("bad mol")
         with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
             with self.assertRaises(LigandPreparationError):
+                vina_helper.prepare_ligand(in_file)
+
+    def test_unparseable_local_ligand_is_rejected(self):
+        in_file = str(self.tmpdir / "bad.sdf")
+        Path(in_file).write_text("not an sdf")
+        meeko_stub, rdkit_stub = self._stubs()
+        rdkit_stub.Chem.SDMolSupplier.return_value.__getitem__.return_value = None
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            with self.assertRaisesRegex(LigandPreparationError, "parseable"):
+                vina_helper.prepare_ligand(in_file)
+
+    def test_local_ligand_without_coordinates_is_rejected(self):
+        in_file = str(self.tmpdir / "flat.sdf")
+        Path(in_file).write_text("mol")
+        meeko_stub, rdkit_stub = self._stubs()
+        mol = rdkit_stub.Chem.SDMolSupplier.return_value.__getitem__.return_value
+        mol.GetNumConformers.return_value = 0
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            with self.assertRaisesRegex(LigandPreparationError, "no coordinates"):
+                vina_helper.prepare_ligand(in_file)
+
+    def test_local_ligand_with_2d_coordinates_is_rejected(self):
+        in_file = str(self.tmpdir / "flat.sdf")
+        Path(in_file).write_text("mol")
+        meeko_stub, rdkit_stub = self._stubs()
+        mol = rdkit_stub.Chem.SDMolSupplier.return_value.__getitem__.return_value
+        mol.GetConformer.return_value.Is3D.return_value = False
+        with patch.dict(sys.modules, self._modules(meeko_stub, rdkit_stub)):
+            with self.assertRaisesRegex(LigandPreparationError, "2-D coordinates"):
                 vina_helper.prepare_ligand(in_file)
 
     def test_addhs_requests_coordinates(self):

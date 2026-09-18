@@ -18,7 +18,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo =^> Installing mutadock and its dependencies...
+echo =^> Installing MUTADOCK and its declared Python dependencies...
 python -m pip install --upgrade pip
 python -m pip install .
 if errorlevel 1 (
@@ -36,4 +36,6 @@ if errorlevel 1 (
 echo.
 echo Installation complete.
 echo Activate the environment with: %VENV_DIR%\Scripts\activate.bat
+echo AutoDock Vina and AutoSite are external tools and are not installed by this script.
+echo For the complete native stack, prefer the documented conda or Docker installation.
 pause

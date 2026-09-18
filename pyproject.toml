@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mutadock"
-version = "2.2.1"
+version = "2.2.2"
 authors = [
   {name = "Naisarg Patel", email = "naisarg.patel14@hotmail.com"}
 ]
@@ -20,6 +20,7 @@ dependencies = [
   'openmm',
   'pdbfixer',
   'pyrosetta-installer',
+  'rdkit',
   'tqdm',
   'pyarrow',
   'pandas',

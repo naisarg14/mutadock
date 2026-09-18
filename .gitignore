@@ -87,14 +87,14 @@ demo/
 # AutoDock result files
 *.dlg
 
-# Docking output PDB files
-*_out.pdb
+# Raw multi-pose Vina output (also covered by *.pdbqt above)
+*_out.pdbqt
 
 # Per-run log files
 *_log.txt
 
-# Vina split SDF output
-*_ligand_*.sdf
+# Extracted best-pose SDF output
+*_out.sdf
 
 # Docking results aggregate
 docking_results.csv

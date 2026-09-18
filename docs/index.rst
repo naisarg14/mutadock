@@ -1,13 +1,13 @@
 MutaDock documentation
 ======================
 
-Release 2.2.1
+Release 2.2.2
 -------------
 
 MUTADOCK 2.2 adds reproducible docking seeds and run provenance, resumable
 mutation and docking workflows, safer structure and ligand validation, and
-timeouts for external preparation and docking tools. Version 2.2.1 updates the
-packaged and online documentation for those changes.
+timeouts for external preparation and docking tools. Version 2.2.2 also aligns
+the installation metadata and examples and validates local ligand coordinates.
 
 .. toctree::
    :maxdepth: 2
@@ -239,7 +239,7 @@ Docking Studies
 ^^^^^^^^^^^^^^^
 
 Docking for multiple receptors and ligands is made simple and efficient by mutadock. The text files containing the names of the receptors and ligands need to be given as input, after that everything is automated. (If md_mutate is used, the text file for receptor is generated automatically)
-Every receptor in the receptor file will be docked with every ligand in the ligand file. A standard Vina configuration file or an AutoSIte prediction output is required.
+Every receptor in the receptor file will be docked with every ligand in the ligand file. Supply a standard Vina configuration file or an existing AutoSite prediction, or omit both to run AutoSite automatically for each receptor.
 Example:
 
 .. code-block::

@@ -370,9 +370,12 @@ generate_csv("data/4QJR.cif")
 # Use BLOSUM62 (downloaded automatically if absent)
 generate_csv("data/4QJR.cif", matrix="BLOSUM62")
 
-# Load a matrix directly
-score_dict = load_matrix("data/PAM250")   # dict[str, dict[str, int]], 3-letter keys
+# Resolve a bundled or downloadable matrix by name
+score_dict = resolve_matrix("PAM250")     # works in source and installed packages
 score_dict = resolve_matrix("PAM30")      # downloads PAM30 from NCBI if needed
+
+# Or load a custom matrix file directly
+score_dict = load_matrix("/path/to/custom_matrix")
 
 # --- Generate mutant PDB ---
 from mutadock.mutation.generate_mutant_pdb import generate_pdb

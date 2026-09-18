@@ -15,7 +15,7 @@ project = "MutaDock"
 copyright = "2026, Naisarg Patel"
 author = "Naisarg Patel"
 version = "2.2"
-release = "2.2.1"
+release = "2.2.2"
 
 # -- General configuration ---------------------------------------------------
 

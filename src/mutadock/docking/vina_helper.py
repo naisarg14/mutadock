@@ -420,6 +420,23 @@ def fetch_ligand(
     return str(dest)
 
 
+def _require_3d_ligand(mol: Any, source: str) -> None:
+    """Validate that an RDKit ligand is non-empty and has a 3-D conformer."""
+    if mol is None or mol.GetNumAtoms() == 0:
+        raise LigandPreparationError(
+            f"Ligand '{source}' does not contain a parseable molecule."
+        )
+    if mol.GetNumConformers() == 0:
+        raise LigandPreparationError(
+            f"Ligand '{source}' has no coordinates; provide a 3-D SDF or MOL2 file."
+        )
+    if not mol.GetConformer().Is3D():
+        raise LigandPreparationError(
+            f"Ligand '{source}' contains only 2-D coordinates; provide a 3-D "
+            "SDF or MOL2 file."
+        )
+
+
 def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> str:
     """Convert an SDF or MOL2 ligand file to PDBQT format using meeko.
 
@@ -434,33 +451,28 @@ def prepare_ligand(in_file: str, out_file: Optional[str] = None) -> str:
     Raises:
         LigandPreparationError: If preparation fails for any reason.
     """
-    try:
-        import sys
+    suffix = Path(in_file).suffix.lower()
+    if suffix not in {".sdf", ".mol2"}:
+        raise LigandPreparationError("Input file is not in SDF or MOL2 format.")
 
+    try:
         from meeko import MoleculePreparation, PDBQTWriterLegacy
         from rdkit import Chem
-    except ModuleNotFoundError:
-        msg = "Error with importing modules for preparing ligand files for Docking.\n"
-        msg += "Easiest way to fix this is to install meeko and rdkit using the following command:\n\n"
-        msg += "python -m pip install meeko rdkit\n"
-        msg += "If you already have meeko and rdkit installed, please check the installation.\n"
-        msg += "If the problem persists, please create a github issue or contact developer at naisarg.patel14@hotmail.com"
-        logger.error(msg)
-        sys.exit(2)
+    except ModuleNotFoundError as e:
+        raise LigandPreparationError(
+            "Ligand preparation requires meeko and RDKit. Install MUTADOCK's "
+            "declared dependencies or run 'python -m pip install meeko rdkit'."
+        ) from e
 
     if out_file is None:
-        if in_file.endswith(".sdf"):
-            out_file = f"{in_file.removesuffix('.sdf')}.pdbqt"
-        elif in_file.endswith(".mol2"):
-            out_file = f"{in_file.removesuffix('.mol2')}.pdbqt"
-        else:
-            raise LigandPreparationError("Input file is not in SDF or MOL2 format.")
+        out_file = str(Path(in_file).with_suffix(".pdbqt"))
 
     try:
-        if in_file.endswith(".sdf"):
+        if suffix == ".sdf":
             mol = Chem.SDMolSupplier(in_file)[0]
-        if in_file.endswith(".mol2"):
+        else:
             mol = Chem.MolFromMol2File(in_file)
+        _require_3d_ligand(mol, in_file)
 
         # addCoords=True is REQUIRED. Without it RDKit adds the hydrogens as
         # topology only, with no 3D coordinates, and meeko then writes every one

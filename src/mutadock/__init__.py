@@ -27,4 +27,4 @@ Top-level package exposing two subpackages:
   preparation and batch docking workflows.
 """
 
-__version__ = "2.2.1"
+__version__ = "2.2.2"

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-09-19
+
+### Added
+- Local SDF and MOL2 ligand inputs are now validated for a parseable molecule and usable 3-D coordinates before Meeko preparation.
+
+### Changed
+- RDKit is now an explicit Python dependency rather than an implicit requirement of ligand preparation.
+- Installation, AutoSite, matrix-loading, and generated-output guidance is consistent across the README, Sphinx documentation, environment file, installer scripts, and ignore rules.
+
 ## [2.2.1] - 2026-09-18
 
 ### Changed

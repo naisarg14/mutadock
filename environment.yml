@@ -39,5 +39,6 @@ dependencies:
 # AutoSite (ADFRsuite), used by `md_quick` for automatic pocket detection
 # when no config file is given, is not packaged on conda-forge/PyPI. Download
 # it separately from https://ccsb.scripps.edu/adfr/downloads/ and put its
-# `bin/` directory on PATH, or always pass `-c config.txt` / `--ligand-file`
-# with an explicit box to skip it.
+# `bin/` directory on PATH, or pass `-c config.txt` with an explicit box to
+# skip automatic pocket detection. Selecting a ligand with `--ligand-file`
+# does not define the docking box.
