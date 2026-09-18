@@ -4,7 +4,6 @@
 [![PyPI version](https://img.shields.io/pypi/v/mutadock.svg)](https://pypi.org/project/mutadock/)
 [![Python](https://img.shields.io/pypi/pyversions/mutadock.svg)](https://pypi.org/project/mutadock/)
 [![Docs](https://readthedocs.org/projects/mutadock/badge/?version=latest)](https://mutadock.readthedocs.io/en/latest/)
-[![Coverage](https://img.shields.io/badge/coverage-45.45%25-yellow.svg)]()
 
 ## Introduction
 
@@ -26,6 +25,13 @@ MUTADOCK is a comprehensive library for protein mutation studies and multi-recep
 **Usability**
 - Simple CLI for each workflow step
 - Python API for scripting and integration into existing pipelines
+
+### What's new in 2.2.0
+
+- Reproducible docking with a configurable random seed (default `19`) and complete run provenance in `docking_results.csv`
+- Safer input validation, including ligand 3D/hydrogen checks and warnings for multi-model, multi-chain, similar-chain, altloc, and insertion-code structures
+- Resumable mutation and docking workflows plus configurable subprocess timeouts
+- PAM250 and BLOSUM62 bundled in the installed package; additional matrices are cached outside the installation directory
 
 
 ## System Requirements
@@ -103,14 +109,11 @@ One command takes a **PDB ID**, a **mutation**, and a **ligand code**, and gives
 md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib
 ```
 
-```
-  Mutation : ASN-A386-HIS
-  ΔΔG      : -27.30 REU (negative = stabilizing)
-  Affinity : -5.66 kcal/mol
-  Report   : mdquick_4QJR/reports/report.html
-```
-
 It fetches + cleans the structure, computes the ΔΔG for that single mutation, builds the mutant, fetches the ligand, finds the pocket with AutoSite (or pass `-c config.txt`), docks, and writes the standard `reports/` bundle. Use `-i protein.pdb` for a local structure, `--ligand-file lig.sdf` for a local ligand, or `--ligand-code 2244` / `cid:5291` / `name:aspirin` for PubChem. Requires the `autosite` binary (ADFRsuite) on PATH when no config is given.
+
+Scores depend on the input structure and protocol, so treat the values printed by
+the demo as results rather than fixed expected output. Pass `--seed` to reproduce
+a docking run exactly.
 
 The staged tools below give you full control over each step.
 
@@ -170,13 +173,20 @@ md_mutate -h                         # all options
 
 Provide exactly one of `-i/--input` (a local `.pdb`/`.cif` file) or `--pdb-id` (a
 4-character RCSB accession, downloaded automatically). `md_mutate` also warns when
-the input contains multiple models, alternate conformations (altlocs), or
-insertion codes, since these affect residue numbering.
+the input contains multiple models or chains, similar chain sequences, alternate
+conformations (altlocs), or insertion codes, since these can make chain selection
+and residue numbering ambiguous. Inspect these warnings and isolate the intended
+chain(s) before interpreting results.
 
 By default every output file is written next to the input structure. Pass
 `-o/--output-dir DIR` to collect them in `DIR` instead (created if absent); the
 paths recorded in `*_mutants.txt` point into `DIR`, so they remain valid input
 for `md_dock`.
+
+`md_mutate` appends to its checkpoint CSVs by default and skips completed items,
+so rerunning an interrupted job resumes it. The direct `md_ddg_single`,
+`md_ddg_double`, and `md_ddg_triple` commands also support `--resume`. Use
+`--no-append` when you intentionally want a fresh run.
 
 #### Mutation Output
 
@@ -197,7 +207,7 @@ for `md_dock`.
 ΔΔG is computed as `score(mutant) − score(wild-type self-mutation reference)`, where **both** sides run the identical repack(+minimization) protocol — so a null WT→WT mutation scores ≈ 0 and the values are not biased toward "stabilizing."
 
 - **Units:** `ddG_value` is in **Rosetta Energy Units (REU), not kcal/mol.** A `ddG_kcal` column is also written, and reports show both. REU ≈ but ≠ kcal/mol.
-- **Scaling factor:** the REU→kcal/mol factor is **`REU_TO_KCAL_SCALE` in `src/mutadock/mutation/predict_ddG.py`** (default `0.34`, ≈ 1/2.94; the ref2015 `cartesian_ddg` convention, Park et al. 2016). **To change it, edit that constant** or pass `--reu-to-kcal FACTOR` per run.
+- **Scaling factor:** the default REU→kcal/mol factor is `0.34` (≈ 1/2.94; the ref2015 `cartesian_ddg` convention, Park et al. 2016). Override it per run with `--reu-to-kcal FACTOR`; modifying installed package code is not required.
 - **Protocol (`--protocol`, default `min`):** the recorded protocol is written to a `ddG_protocol` column, and reports flag screening-only runs.
 
   ```bash
@@ -259,6 +269,7 @@ Output files are named `{stem}_{WTAA}-{CHAIN}{POS}-{NEWAA}.pdb` (e.g. `protein_A
 ```bash
 md_dock -r receptors.txt -l ligands.txt -c config.txt
 md_dock -r receptors.txt -l ligands.txt -c config.txt -o results/  # collect outputs in results/
+md_dock -r receptors.txt -l ligands.txt -c config.txt --seed 19    # reproducible run
 md_dock -h   # all options
 ```
 
@@ -268,17 +279,22 @@ By default docking outputs go to an `out/` folder next to each receptor. Pass
 `-o/--output-dir DIR` to collect poses, logs, `docking_results.csv`, and the
 `*_completed.txt` resume file in a single `DIR` instead. Prepared PDBQT files and
 AutoSite caches still live next to their inputs so they can be reused across runs.
+Completed receptor–ligand pairs are skipped automatically; use
+`--ignore-existing` to dock them again. The default seed is `19`. It can also be
+set as `seed = ...` in the configuration file, while an explicit CLI `--seed`
+takes precedence. The CSV records the search box, exhaustiveness, and seed for
+every result.
 
 #### Docking Output
 
 | # | Output | Description |
 |---|--------|-------------|
 | 1 | PDBQT files | Prepared receptor and ligand files |
-| 2 | Log file | Vina output with binding scores per combination |
-| 3 | Output PDB | Top 5 docking poses per combination |
-| 4 | Output PDBQT | Best pose (Vina split) per combination |
-| 5 | Output SDF | Best pose as SDF for visualization |
-| 6 | `docking_results.csv` | All affinities tabulated for easy analysis |
+| 2 | `*_log.txt` | Vina output with binding scores per combination |
+| 3 | `*_out.pdbqt` | Raw multi-pose Vina output |
+| 4 | `*_out.sdf` | Extracted best pose for visualization |
+| 5 | `docking_results.csv` | Affinities plus search-box, exhaustiveness, and seed provenance |
+| 6 | `*_completed.txt` | Resume checkpoint containing completed receptor–ligand pairs |
 
 ### Reports
 
@@ -387,6 +403,7 @@ dock_vina(
     log_file="vina.log",
     center=[10.0, 5.0, 20.0],
     box_size=[20.0, 20.0, 20.0],
+    seed=19,
 )
 ```
 
@@ -421,6 +438,17 @@ If NCBI FTP is unreachable, download the matrix manually and use `--matrix-file`
 ```bash
 md_csv_generator -i protein.pdb --matrix-file /path/to/PAM30
 ```
+
+PAM250 and BLOSUM62 are included with MUTADOCK. Other downloaded matrices are
+cached in `~/.cache/mutadock/matrices`; set `MUTADOCK_DATA_DIR` to use a different
+cache directory.
+
+**An external preparation or docking command times out**
+
+The default limits are 900 seconds for receptor preparation, 1800 seconds for
+AutoSite, and 3600 seconds for Vina. Override them with
+`MUTADOCK_RECEPTOR_PREP_TIMEOUT`, `MUTADOCK_AUTOSITE_TIMEOUT`, and
+`MUTADOCK_VINA_TIMEOUT`, respectively. Set a value to `0` to disable that timeout.
 
 **CIF file not recognized**
 PDBFixer and BioPython both support `.cif` natively. Make sure the file extension is `.cif` or `.pdb` — other extensions are not accepted.
