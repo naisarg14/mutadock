@@ -457,6 +457,14 @@ AutoSite, and 3600 seconds for Vina. Override them with
 PDBFixer and BioPython both support `.cif` natively. Make sure the file extension is `.cif` or `.pdb` — other extensions are not accepted.
 
 
+## Benchmarks and reproducibility
+
+The code, input guidance, and compact result tables used for the MUTADOCK
+benchmark analyses are available in the
+[MUTADOCK benchmarks repository](https://github.com/naisarg14/mutadock-benchmarks).
+It includes the BCR-ABL/imatinib validation and the PLATINUM benchmark workflow.
+
+
 ## Applications
 
 - **Protein Engineering:** Identify stabilising mutations for therapeutic proteins
