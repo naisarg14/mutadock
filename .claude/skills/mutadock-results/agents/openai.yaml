@@ -1,0 +1,4 @@
+interface:
+  display_name: "MUTADOCK Results"
+  short_description: "Interpret ΔΔG and docking output, and build reports"
+  default_prompt: "Use $mutadock-results to interpret my MUTADOCK run and tell me which mutants hold up."

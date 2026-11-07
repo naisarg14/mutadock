@@ -1,0 +1,4 @@
+interface:
+  display_name: "MUTADOCK Mutation Scan"
+  short_description: "Plan and run ΔΔG mutation studies with PyRosetta"
+  default_prompt: "Use $mutadock-mutation to plan a correctly sized ΔΔG scan for my protein."

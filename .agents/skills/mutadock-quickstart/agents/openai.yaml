@@ -1,0 +1,4 @@
+interface:
+  display_name: "MUTADOCK Quickstart"
+  short_description: "One-command mutation + docking run with md_quick"
+  default_prompt: "Use $mutadock-quickstart to run a single mutation end to end and check my setup."

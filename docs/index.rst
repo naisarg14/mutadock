@@ -1,18 +1,21 @@
 MutaDock documentation
 ======================
 
-Release 2.2.2
+Release 2.3.0
 -------------
 
-MUTADOCK 2.2 adds reproducible docking seeds and run provenance, resumable
-mutation and docking workflows, safer structure and ligand validation, and
-timeouts for external preparation and docking tools. Version 2.2.2 also aligns
-the installation metadata and examples and validates local ligand coordinates.
+MUTADOCK 2.3 adds agent skills: task-focused guides that let Claude Code, Codex
+and other Agent Skills-compatible agents drive MUTADOCK directly, plus the
+``md_skills`` command for installing them outside a repository clone. The 2.2
+series added reproducible docking seeds and run provenance, resumable mutation
+and docking workflows, safer structure and ligand validation, and timeouts for
+external preparation and docking tools.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   agent-skills
    api/index
 
 Introduction

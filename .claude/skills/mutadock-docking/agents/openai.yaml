@@ -1,0 +1,4 @@
+interface:
+  display_name: "MUTADOCK Docking"
+  short_description: "Batch receptor-ligand docking with AutoDock Vina"
+  default_prompt: "Use $mutadock-docking to dock my receptors against my ligands reproducibly."

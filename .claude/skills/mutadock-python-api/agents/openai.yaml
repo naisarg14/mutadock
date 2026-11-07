@@ -1,0 +1,4 @@
+interface:
+  display_name: "MUTADOCK Python API"
+  short_description: "Script MUTADOCK from Python instead of the CLI"
+  default_prompt: "Use $mutadock-python-api to script MUTADOCK inside my own pipeline."

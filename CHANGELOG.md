@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-11-06
+
+### Added
+- **Agent skills.** Seven task-focused guides (`mutadock-setup`, `-quickstart`, `-mutation`, `-docking`, `-results`, `-debugging`, `-python-api`) teach Claude Code, Codex and other Agent Skills-compatible agents how to drive MUTADOCK: CLI flags, the fast/min/cartesian trade-off, REU vs kcal/mol, the cost model of a full scan, and the common input failures.
+- `AGENTS.md` and `CLAUDE.md` at the repository root, so an agent started in a clone picks up project conventions automatically.
+- **`md_skills`** command — `md_skills list|path|install` copies the bundled skills into `~/.claude/skills` and/or `~/.agents/skills` (or a single project) for users who installed from PyPI and never cloned the repository. The skills ship inside the wheel.
+- `scripts/sync_agent_skills.py` regenerates the `.claude/skills` mirror from the canonical `.agents/skills` tree, with `--check` for CI.
+- `tests/test_skills/` verifies skill frontmatter, `INDEX.md` routing, mirror consistency, and that no skill references an `md_*` command that is not declared in `[project.scripts]`.
+
+
 ## [2.2.2] - 2026-09-19
 
 ### Added

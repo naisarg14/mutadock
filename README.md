@@ -158,6 +158,53 @@ md_dock -r 4QJR_modified_mutants.txt -l ligands.txt -c config.txt
 ```
 
 
+## Using MUTADOCK with coding agents
+
+MUTADOCK ships **agent skills**: focused Markdown guides that teach Claude Code,
+Codex and other agents following the [Agent Skills](https://agentskills.io/specification)
+convention how to drive the library — the CLI flags, the ΔΔG protocols and units,
+how to size a run that would otherwise take hours, and the common input failures.
+
+| Skill | Use it for |
+|-------|------------|
+| `mutadock-setup` | Installing or verifying PyRosetta, Vina, meeko, pdbfixer/openmm, AutoSite |
+| `mutadock-quickstart` | A one-command end-to-end run with `md_quick` |
+| `mutadock-mutation` | Planning and running ΔΔG scans; writing mutant PDBs |
+| `mutadock-docking` | Batch docking, search boxes, reproducible seeds |
+| `mutadock-results` | Reading the CSVs and reports; computing ΔΔG_binding |
+| `mutadock-debugging` | Chain, residue, ligand and structure input failures |
+| `mutadock-python-api` | Scripting MUTADOCK from Python |
+
+**Working in a clone** — just start your agent at the repository root:
+
+```bash
+git clone https://github.com/naisarg14/mutadock && cd mutadock
+claude        # or: codex
+```
+
+Claude Code reads `CLAUDE.md` and `.claude/skills/`; Codex reads `AGENTS.md` and
+`.agents/skills/`. Both trees are committed, so skills are discovered
+automatically — ask in plain language ("plan a ΔΔG scan around residue A386"),
+or invoke one explicitly with `/mutadock-mutation` (Claude Code) or
+`$mutadock-mutation` (Codex).
+
+**Working anywhere else** — install the skills once from the pip package:
+
+```bash
+md_skills list                             # what's bundled
+md_skills install --claude --codex --user  # ~/.claude/skills and ~/.agents/skills
+md_skills install --project ~/my-study     # that project only
+```
+
+Skills are guidance, not an installer: running a workflow still needs the
+MUTADOCK environment described under [Installation](#installation).
+
+Contributors: `.agents/skills/` is the source of truth and `.claude/skills/` is
+a generated mirror. After editing a skill, run
+`python scripts/sync_agent_skills.py`; `pytest tests/test_skills` fails if the
+trees drift or a skill names a command that does not exist.
+
+
 ## How-To Guide
 
 ### Mutation Studies
@@ -355,6 +402,7 @@ automatically with `mutadock`).
 | `md_ddg_triple` | Calculate triple-mutation ΔΔG combinations |
 | `md_generate_pdb` | Generate mutant PDB file(s) from a single mutation or a CSV list |
 | `md_report` | Build a self-contained HTML + PPTX report from a run directory |
+| `md_skills` | Install the bundled agent skills for Claude Code / Codex |
 
 
 ## Python API

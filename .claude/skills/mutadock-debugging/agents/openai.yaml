@@ -1,0 +1,4 @@
+interface:
+  display_name: "MUTADOCK Input Debugging"
+  short_description: "Fix chain, residue, ligand and structure input failures"
+  default_prompt: "Use $mutadock-debugging to diagnose why my MUTADOCK input is failing."
