@@ -80,7 +80,18 @@ def _resolve_aa1(aa: str) -> str:
 
 
 def _mutation_label(wt_aa: str, chain: str, position: int, new_aa1: str) -> str:
-    """Build a compact label like ASN-A386-ALA for use in file names."""
+    """Build a compact label such as ``ASN-A386-A`` for use in file names.
+
+    The two residues are not formatted alike, which is deliberate but easy to
+    misread: *new_aa1* has already been normalized to a 1-letter code by
+    :func:`_resolve_aa1`, while *wt_aa* is whatever the caller supplied (1- or
+    3-letter, or ``"X"`` when the CSV omitted it) because it is only used for
+    naming.  So a CSV row of ``A,386,ASN,ALA`` yields ``ASN-A386-A``.
+
+    Note that ``md_mutate`` names its mutants differently, via
+    :mod:`~mutadock.mutation.generate_mutants`; match generated files on chain
+    and position rather than on an assumed filename.
+    """
     return f"{wt_aa}-{chain}{position}-{new_aa1}"
 
 
