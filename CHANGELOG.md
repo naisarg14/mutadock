@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`md_skills`** command — `md_skills list|path|install` copies the bundled skills into `~/.claude/skills` and/or `~/.agents/skills` (or a single project) for users who installed from PyPI and never cloned the repository. The skills ship inside the wheel.
 - `scripts/sync_agent_skills.py` regenerates the `.claude/skills` mirror from the canonical `.agents/skills` tree, with `--check` for CI.
 - `tests/test_skills/` verifies skill frontmatter, `INDEX.md` routing, mirror consistency, and that no skill references an `md_*` command that is not declared in `[project.scripts]`.
+- `data/config.txt` — the AutoDock Vina search box for the bundled 4QJR example, used by the Docker quick-start.
+
+### Fixed
+- `generate_csv()` now accepts `.cif` as well as `.pdb`, matching the `md_csv_generator` CLI. Previously a CIF reached BioPython's PDB-only parser and failed with an opaque `ValueError: invalid literal for int() with base 10`. Conversion happens before the default output names are derived, so a CIF input no longer yields `NAME.cif_mutations_all.csv`.
+- The Docker quick-start in `README.md` and the `Dockerfile` header advertised `md_quick` without `-c`, which cannot work: the image deliberately omits AutoSite, so pocket detection has no binary to call. Both now pass `-c data/config.txt` and state the limitation.
 
 
 ## [2.2.2] - 2026-09-19

@@ -57,8 +57,14 @@ stack + PyRosetta) in one step:
 
 ```bash
 docker build -t mutadock .
-docker run --rm -it mutadock md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib
+docker run --rm -it mutadock md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib -c data/config.txt
 ```
+
+The image deliberately does not include AutoSite (ADFRsuite has no conda/PyPI
+package), so `md_quick` inside the container needs an explicit search box.
+`data/config.txt` ships with the image and holds the box for the bundled 4QJR
+example; supply your own for any other target, or install ADFRsuite into the
+image if you want automatic pocket detection.
 
 Mount your own files and collect outputs on the host:
 

@@ -11,21 +11,22 @@ filtering, a non-standard loop, or integration into an existing pipeline.
 
 ## Mutation enumeration and matrices
 
-`generate_csv` parses with BioPython's `PDBParser` and accepts **PDB only** —
-CIF conversion happens in the `md_csv_generator` CLI, not in the function. Pass
-a `.cif` directly and it fails with an opaque
-`ValueError: invalid literal for int() with base 10`. Convert first:
+`generate_csv` takes `.pdb` or `.cif`. A CIF is converted to PDB first (the
+underlying parser is PDB-only), and the converted path is what the default
+output names and the CSV's `pdb` column refer to — so the result feeds the ΔΔG
+calculators unchanged. Converting yourself with `convert_cif_pdb` is still fine;
+it is just no longer required.
 
 ```python
 from mutadock.mutation.csv_generator import generate_csv
 from mutadock.mutation.helpers import convert_cif_pdb, resolve_matrix, load_matrix
 
-pdb = convert_cif_pdb("data/4QJR.cif")                # -> data/4QJR.pdb
-
 # Returns (positive_csv, all_csv); defaults are derived from the input name
-out_op, out_all = generate_csv(pdb)
-generate_csv(pdb, matrix="BLOSUM62")                  # downloaded if absent
-generate_csv(pdb, out_all="all.csv", out_op="positive.csv")
+out_op, out_all = generate_csv("data/4QJR.cif")       # writes data/4QJR.pdb too
+generate_csv("data/4QJR.pdb", matrix="BLOSUM62")      # downloaded if absent
+generate_csv("data/4QJR.pdb", out_all="all.csv", out_op="positive.csv")
+
+pdb = convert_cif_pdb("data/4QJR.cif")                # explicit, if you want the path
 
 scores = resolve_matrix("PAM250")      # bundled; works installed or from source
 scores = resolve_matrix("PAM30")       # fetched from NCBI, cached

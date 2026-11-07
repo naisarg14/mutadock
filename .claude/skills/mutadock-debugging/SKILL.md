@@ -121,8 +121,14 @@ environment: `pip install meeko`. See `mutadock-setup`.
 
 **"CIF file not recognized".** Only `.pdb` and `.cif` extensions are accepted —
 a correct file with a different extension is rejected. CIF inputs are converted
-up front (`convert_cif_pdb`); downstream files then carry a `_modified` stem,
-which is why output names differ from the input name.
+up front (`convert_cif_pdb`), by both the CLIs and `generate_csv`, so a `.cif`
+also leaves a `.pdb` next to it. Downstream files carry the converted stem,
+which is why output names can differ from the name you passed in.
+
+**`ValueError: invalid literal for int() with base 10` from a structure call.**
+A CIF reached a PDB-only parser. `generate_csv` converts for you; other helpers
+that take a structure path may not, so pass `convert_cif_pdb(path)` when a
+function's docstring says PDB.
 
 **PDBFixer errors during receptor preparation.** Missing residues, nonstandard
 residues or broken chain breaks. Check the structure opens in BioPython first,

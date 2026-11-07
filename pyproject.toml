@@ -56,24 +56,11 @@ packages = ["src/mutadock"]
 [tool.hatch.build.targets.wheel.force-include]
 ".agents/skills" = "mutadock/agent_skills"
 
-# `python -m build` builds the wheel FROM the sdist, so the skills have to be
-# in the sdist too or the force-include above has nothing to copy.
-[tool.hatch.build.targets.sdist]
-include = [
-  "/src",
-  "/tests",
-  "/docs",
-  "/scripts",
-  "/.agents/skills",
-  "/AGENTS.md",
-  "/CLAUDE.md",
-  "/README.md",
-  "/CHANGELOG.md",
-  "/LICENSE",
-  "/environment.yml",
-  "/Dockerfile",
-  "/pyproject.toml",
-]
+# No explicit sdist file list: `python -m build` builds the wheel FROM the
+# sdist, so `.agents/skills` has to be in it for the force-include above to
+# find anything -- and hatchling already ships every non-ignored path,
+# dotfiles included. An allow-list here silently dropped `data/`,
+# `install.sh` and `win_install.bat`, which 2.2.2 shipped.
 
 [project.scripts]
 md_mutate = "mutadock.mutation.np_mutation:np_mutation"

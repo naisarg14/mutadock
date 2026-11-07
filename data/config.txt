@@ -1,0 +1,25 @@
+# AutoDock Vina search box for the bundled 4QJR example.
+#
+# This is a worked example, not a general default: the centre below is the
+# imatinib pocket of PDB 4QJR, so it only makes sense for that structure. For
+# any other target, either supply your own centre/size here or let AutoSite
+# find the pocket (requires the `autosite` binary from ADFRsuite on PATH).
+#
+# Used by the Docker quick-start in README.md, where AutoSite is deliberately
+# not installed:
+#   md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib -c data/config.txt
+
+center_x = -21.953523
+center_y = 35.571606
+center_z = -8.516345
+
+size_x = 20
+size_y = 20
+size_z = 20
+
+exhaustiveness = 32
+n_poses = 20
+n_poses_write = 5
+
+# Fixed so the example reproduces exactly; change it for an independent replicate.
+seed = 19

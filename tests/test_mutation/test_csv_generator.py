@@ -531,3 +531,54 @@ class TestPAM250Matrix(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCifInput:
+    """generate_csv() accepts CIF directly, like the md_csv_generator CLI."""
+
+    def test_cif_is_converted_and_named_from_the_pdb(self, tmp_path, monkeypatch):
+        """A .cif input must not leak its extension into the output names.
+
+        ``removesuffix('.pdb')`` leaves '.cif' in place, so deriving the default
+        names before conversion produced '4QJR.cif_mutations_all.csv'.
+        """
+        from mutadock.mutation import csv_generator
+
+        cif = tmp_path / "prot.cif"
+        cif.write_text("placeholder", encoding="utf-8")
+
+        converted = tmp_path / "prot.pdb"
+        converted.write_text("placeholder", encoding="utf-8")
+
+        monkeypatch.setattr(
+            csv_generator, "convert_cif_pdb", lambda src: str(converted)
+        )
+        monkeypatch.setattr(
+            csv_generator,
+            "get_residues",
+            lambda f: {1: ("A", 1, "ALA")},
+        )
+
+        out_op, out_all = csv_generator.generate_csv(str(cif))
+
+        assert out_op == str(tmp_path / "prot_mutations.csv")
+        assert out_all == str(tmp_path / "prot_mutations_all.csv")
+        assert ".cif" not in out_op and ".cif" not in out_all
+
+    def test_pdb_input_is_not_converted(self, tmp_path, monkeypatch):
+        """A .pdb input must not be routed through the converter."""
+        from mutadock.mutation import csv_generator
+
+        pdb = tmp_path / "prot.pdb"
+        pdb.write_text("placeholder", encoding="utf-8")
+
+        def _fail(src):  # pragma: no cover - must not run
+            raise AssertionError("convert_cif_pdb called for a PDB input")
+
+        monkeypatch.setattr(csv_generator, "convert_cif_pdb", _fail)
+        monkeypatch.setattr(
+            csv_generator, "get_residues", lambda f: {1: ("A", 1, "ALA")}
+        )
+
+        out_op, _ = csv_generator.generate_csv(str(pdb))
+        assert out_op == str(tmp_path / "prot_mutations.csv")

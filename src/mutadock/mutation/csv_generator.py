@@ -60,10 +60,15 @@ def generate_csv(
     matrix: str = "PAM250",
     matrix_file: Optional[str] = None,
 ) -> tuple[str, str]:
-    """Generate mutation CSV files for all possible substitutions in a PDB.
+    """Generate mutation CSV files for all possible substitutions in a structure.
+
+    Accepts ``.pdb`` or ``.cif``.  A CIF input is converted to PDB first (the
+    underlying parser is PDB-only), and every derived path -- the default
+    output names and the ``pdb`` column -- refers to the converted file, so the
+    CSV stays usable as input for the ddG calculators.
 
     Args:
-        pdb_file: Path to the PDB file.
+        pdb_file: Path to the structure file (``.pdb`` or ``.cif``).
         out_all: Output path for the full mutations CSV (all prProb values).
         out_op: Output path for the filtered CSV (prProb > 0).
         matrix: Name of a scoring matrix in ``data/`` or available on the NCBI
@@ -74,10 +79,19 @@ def generate_csv(
         ``(out_op, out_all)`` paths.
 
     Raises:
-        mutadock.mutation.exceptions.PDBFileError: If the PDB file cannot be read.
-        CSVGenerationError: If the PDB file contains no residues.
-        MutationError: If the matrix cannot be loaded or downloaded.
+        mutadock.mutation.exceptions.PDBFileError: If the structure cannot be read.
+        CSVGenerationError: If the structure contains no residues.
+        MutationError: If a CIF input cannot be converted, or the matrix cannot
+            be loaded or downloaded.
     """
+    # The parser below is PDB-only, so convert first. This mirrors what the
+    # md_csv_generator CLI already does, and must happen before the default
+    # output names are derived: removesuffix('.pdb') leaves '.cif' in place,
+    # which would yield '4QJR.cif_mutations_all.csv'.
+    if pdb_file.endswith(".cif"):
+        pdb_file = convert_cif_pdb(pdb_file)
+        logger.info("Converted CIF input to PDB: %s", pdb_file)
+
     if not out_all:
         out_all = f"{pdb_file.removesuffix('.pdb')}_mutations_all.csv"
     if not out_op:

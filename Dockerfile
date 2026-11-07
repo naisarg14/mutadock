@@ -8,8 +8,9 @@
 #
 # Build:
 #   docker build -t mutadock .
-# Run the bundled demo:
-#   docker run --rm -it mutadock md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib
+# Run the bundled demo (-c is required: AutoSite is not installed here, see
+# the note near the end of this file):
+#   docker run --rm -it mutadock md_quick --pdb-id 4QJR --mutation A:386:ASN:HIS --ligand-code imatinib -c data/config.txt
 # Mount your own data and collect outputs on the host:
 #   docker run --rm -it -v "$PWD/work:/work" -w /work mutadock md_mutate -i /work/protein.pdb
 
@@ -50,7 +51,9 @@ SHELL ["/bin/bash", "-c"]
 # AutoSite (ADFRsuite), used by `md_quick` for automatic pocket detection
 # when no config file is given, has no conda/PyPI package and isn't installed
 # here — see README.md. `md_quick`/`md_dock` still work fully with an
-# explicit `-c config.txt` / center+box.
+# explicit `-c config.txt` / center+box, so every example in this file and in
+# the README's Docker section passes one. `data/config.txt` ships in the image
+# and holds the box for the bundled 4QJR example.
 
 ENTRYPOINT []
 CMD ["bash"]
